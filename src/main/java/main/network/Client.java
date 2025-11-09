@@ -29,18 +29,32 @@ public class Client {
      */
     public boolean connect() {
         try {
+            messageHandler.onServerStatus("Attempting to connect to " + host + ":" + port + "...");
             socket = new Socket();
-            socket.connect(new InetSocketAddress(host, port), 5000); // 5 second timeout
+            socket.connect(new InetSocketAddress(host, port), 10000); // 10 second timeout
             connection = new PeerConnection(socket, messageHandler);
             connected = true;
             
             // Start listening for messages
             new Thread(connection).start();
             
-            messageHandler.onServerStatus("Connected to " + host + ":" + port);
+            messageHandler.onServerStatus("✅ Connected successfully to " + host + ":" + port);
             return true;
+        } catch (SocketTimeoutException e) {
+            messageHandler.onServerStatus("❌ Connection timeout! Possible causes:\n" +
+                "1. Server is not running\n" +
+                "2. Firewall is blocking connection\n" +
+                "3. Wrong IP/Port\n" +
+                "4. Server is behind router (needs port forwarding)");
+            return false;
+        } catch (ConnectException e) {
+            messageHandler.onServerStatus("❌ Connection refused! Server is not accepting connections on " + host + ":" + port);
+            return false;
+        } catch (UnknownHostException e) {
+            messageHandler.onServerStatus("❌ Unknown host: " + host + " - Check if IP address is correct");
+            return false;
         } catch (IOException e) {
-            messageHandler.onServerStatus("Failed to connect: " + e.getMessage());
+            messageHandler.onServerStatus("❌ Failed to connect: " + e.getMessage());
             return false;
         }
     }
