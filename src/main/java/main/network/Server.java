@@ -2,7 +2,10 @@ package main.network;
 
 import main.model.Message;
 import main.model.FileTransfer;
+import main.util.SSLUtil;
 
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLServerSocketFactory;
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -18,6 +21,7 @@ public class Server {
     private List<PeerConnection> connections;
     private ExecutorService threadPool;
     private MessageHandler messageHandler;
+    private boolean useSSL = true; // Enable SSL by default
     
     public Server(int port, MessageHandler messageHandler) {
         this.port = port;
@@ -36,9 +40,17 @@ public class Server {
         
         threadPool.execute(() -> {
             try {
-                serverSocket = new ServerSocket(port);
+                // Create SSL or regular server socket
+                if (useSSL && SSLUtil.isSSLAvailable()) {
+                    SSLServerSocketFactory sslFactory = SSLUtil.getServerSocketFactory();
+                    serverSocket = sslFactory.createServerSocket(port);
+                    messageHandler.onServerStatus("🔒 Secure server started on port " + port + " (SSL/TLS enabled)");
+                } else {
+                    serverSocket = new ServerSocket(port);
+                    messageHandler.onServerStatus("Server started on port " + port + " (No encryption)");
+                }
+                
                 running = true;
-                messageHandler.onServerStatus("Server started on port " + port);
                 
                 while (running) {
                     try {
@@ -57,6 +69,8 @@ public class Server {
                 }
             } catch (IOException e) {
                 messageHandler.onServerStatus("Server error: " + e.getMessage());
+            } catch (Exception e) {
+                messageHandler.onServerStatus("SSL error: " + e.getMessage());
             }
         });
     }
