@@ -3,6 +3,7 @@ package main.ui;
 import main.model.*;
 import main.network.Client;
 import main.network.MessageHandler;
+import main.network.NotificationClient;
 import main.network.PeerConnection;
 import main.network.Server;
 import main.util.NetworkUtil;
@@ -24,6 +25,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
     private Map<String, PeerConnection> peerConnections; // Track peer connections
     private Map<String, String> peerUsernames; // Map IP:Port -> Username
     private Map<PeerConnection, String> connectionUsernames; // Map Connection -> Username
+    private NotificationClient notificationClient;
     
     // Group Chat components
     private JTextArea chatArea;
@@ -59,7 +61,6 @@ public class MainDashboard extends JFrame implements MessageHandler {
     private JList<String> peerList;
     private DefaultListModel<String> peerListModel;
     private JTabbedPane tabbedPane;
-    private ChatWindow activeChatWindow;
     
     public MainDashboard(User user) {
         this.currentUser = user;
@@ -70,6 +71,25 @@ public class MainDashboard extends JFrame implements MessageHandler {
         this.peerListModel = new DefaultListModel<>();
         this.quizResults = new HashMap<>();
         
+        // Start UDP listener for notifications
+        notificationClient = new NotificationClient(msg -> {
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    System.out.println("[DEBUG] " + currentUser.getUsername() + " showing notification: " + msg);
+                    NotificationPopup popup = new NotificationPopup(this, msg);
+                    popup.showPopup(3000); // Show for 3 seconds
+                } catch (Exception e) {
+                    System.err.println("[ERROR] Failed to show notification: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            });
+        }, currentUser.getUsername());
+
+        notificationClient.start();
+
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setVisible(true);
+
         initComponents();
         setLocationRelativeTo(null);
     }
@@ -546,7 +566,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 return;
             }
             
-            server = new Server(port, this);
+            server = new Server(port, this, currentUser.getUsername());
             server.start();
             
             startServerButton.setEnabled(false);
@@ -603,7 +623,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     return;
                 }
                 
-                Client client = new Client(ip, port, this);
+                Client client = new Client(ip, port, this, currentUser.getUsername());
                 if (client.connect()) {
                     connectedPeers.add(client);
                     peerListModel.addElement(ip + ":" + port);

@@ -2,9 +2,7 @@ package main.network;
 
 import main.model.Message;
 import main.model.FileTransfer;
-import main.util.SSLUtil;
 
-import javax.net.ssl.SSLSocketFactory;
 import java.io.*;
 import java.net.*;
 
@@ -17,13 +15,15 @@ public class Client {
     private Socket socket;
     private PeerConnection connection;
     private MessageHandler messageHandler;
+    private String currentUsername;
+    private NotificationServer notificationServer;
     private boolean connected;
-    private boolean useSSL = true; // Enable SSL by default
     
-    public Client(String host, int port, MessageHandler messageHandler) {
+    public Client(String host, int port, MessageHandler messageHandler, String currentUsername) {
         this.host = host;
         this.port = port;
         this.messageHandler = messageHandler;
+        this.currentUsername = currentUsername;
         this.connected = false;
     }
     
@@ -34,33 +34,16 @@ public class Client {
         try {
             messageHandler.onServerStatus("Attempting to connect to " + host + ":" + port + "...");
             
-            // Try SSL connection first
-            if (useSSL && SSLUtil.isSSLAvailable()) {
-                try {
-                    SSLSocketFactory sslFactory = SSLUtil.getSocketFactory();
-                    socket = sslFactory.createSocket();
-                    socket.connect(new InetSocketAddress(host, port), 10000); // 10 second timeout
-                    messageHandler.onServerStatus("🔒 Establishing secure connection (SSL/TLS)...");
-                } catch (Exception sslError) {
-                    // Fallback to non-SSL if SSL fails
-                    messageHandler.onServerStatus("SSL connection failed, trying standard connection...");
-                    socket = new Socket();
-                    socket.connect(new InetSocketAddress(host, port), 10000);
-                }
-            } else {
-                socket = new Socket();
-                socket.connect(new InetSocketAddress(host, port), 10000);
-            }
+            socket = new Socket();
+            socket.connect(new InetSocketAddress(host, port), 10000); // 10 second timeout
             
-            connection = new PeerConnection(socket, messageHandler);
+            connection = new PeerConnection(socket, messageHandler, currentUsername);
             connected = true;
             
             // Start listening for messages
             new Thread(connection).start();
             
-            String securityStatus = (socket instanceof javax.net.ssl.SSLSocket) ? 
-                "✅ Connected securely (Encrypted)" : "✅ Connected (Not encrypted)";
-            messageHandler.onServerStatus(securityStatus + " to " + host + ":" + port);
+            messageHandler.onServerStatus("✅ Connected to " + host + ":" + port);
             return true;
         } catch (SocketTimeoutException e) {
             messageHandler.onServerStatus("❌ Connection timeout! Possible causes:\n" +
