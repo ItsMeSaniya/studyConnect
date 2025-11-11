@@ -1,9 +1,7 @@
 package main.network;
 
 import main.model.Message;
-import main.util.SSLUtil;
 
-import javax.net.ssl.SSLServerSocketFactory;
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -20,7 +18,6 @@ public class Server {
     private ExecutorService threadPool;
     private MessageHandler messageHandler;
     private String currentUsername;
-    private boolean useSSL = false; // Enable SSL by default
 
     public Server(int port, MessageHandler messageHandler, String currentUsername) {
         this.port = port;
@@ -40,15 +37,8 @@ public class Server {
 
         threadPool.execute(() -> {
             try {
-                // Create SSL or regular server socket
-                if (useSSL && SSLUtil.isSSLAvailable()) {
-                    SSLServerSocketFactory sslFactory = SSLUtil.getServerSocketFactory();
-                    serverSocket = sslFactory.createServerSocket(port);
-                    messageHandler.onServerStatus("🔒 Secure server started on port " + port + " (SSL/TLS enabled)");
-                } else {
-                    serverSocket = new ServerSocket(port);
-                    messageHandler.onServerStatus("Server started on port " + port + " (No encryption)");
-                }
+                serverSocket = new ServerSocket(port);
+                messageHandler.onServerStatus("Server started on port " + port);
 
                 running = true;
 
@@ -69,8 +59,6 @@ public class Server {
                 }
             } catch (IOException e) {
                 messageHandler.onServerStatus("Server error: " + e.getMessage());
-            } catch (Exception e) {
-                messageHandler.onServerStatus("SSL error: " + e.getMessage());
             }
         });
     }
