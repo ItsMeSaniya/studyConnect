@@ -11,8 +11,16 @@ public class Message implements Serializable {
     private static final long serialVersionUID = 1L;
     
     public enum MessageType {
-        TEXT, FILE, SYSTEM, USER_JOIN, USER_LEAVE, PEER_REQUEST, PEER_RESPONSE,
-        BROADCAST, QUIZ_START, QUIZ_ANSWER, QUIZ_RESULT, QUIZ_END, PEER_TO_PEER
+        TEXT,
+        FILE,
+        BROADCAST,
+        PEER_TO_PEER,
+        USER_JOIN,
+        USER_LEAVE,
+        QUIZ_START,
+        QUIZ_ANSWER,
+        QUIZ_RESULT,
+        PEER_LIST  // New: Server sends list of connected peers to clients
     }
     
     private String sender;
@@ -53,6 +61,11 @@ public class Message implements Serializable {
     
     public void setRecipient(String recipient) {
         this.recipient = recipient;
+    }
+    
+    // Alias for P2P messages
+    public String getReceiver() {
+        return recipient;
     }
     
     public String getContent() {

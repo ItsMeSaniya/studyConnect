@@ -6,6 +6,7 @@ import main.model.User;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -13,9 +14,10 @@ import java.util.Map;
  * Login and Registration Frame with modern UI
  */
 public class LoginFrame extends JFrame {
-    private JTextField usernameField;
-    private JPasswordField passwordField;
-    private JTextField emailField;
+    private JTextField loginUsernameField;
+    private JPasswordField loginPasswordField;
+    private JTextField registerUsernameField;
+    private JPasswordField registerPasswordField;
     private JButton loginButton;
     private JButton registerButton;
     private JButton switchModeButton;
@@ -23,11 +25,17 @@ public class LoginFrame extends JFrame {
     private CardLayout cardLayout;
     private Map<String, User> userDatabase;
     private boolean isLoginMode = true;
+    private static final String USERS_FILE = "users.txt";
     
     public LoginFrame() {
         userDatabase = new HashMap<>();
-        // Add a default user for testing
-        userDatabase.put("admin", new User("admin", "admin", "admin@studyconnect.com"));
+        loadUsers(); // Load existing users from file
+        
+        // Add default admin user if not exists
+        if (!userDatabase.containsKey("admin")) {
+            userDatabase.put("admin", new User("admin", "admin", "admin@studyconnect.com"));
+            saveUsers();
+        }
         
         initComponents();
         setLocationRelativeTo(null);
@@ -104,12 +112,12 @@ public class LoginFrame extends JFrame {
         panel.add(Box.createVerticalStrut(5));
         
         // Username Field
-        usernameField = new JTextField();
-        usernameField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        usernameField.setMaximumSize(new Dimension(300, 35));
-        usernameField.setAlignmentX(Component.CENTER_ALIGNMENT);
-        usernameField.setHorizontalAlignment(JTextField.CENTER);
-        panel.add(usernameField);
+        loginUsernameField = new JTextField();
+        loginUsernameField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        loginUsernameField.setMaximumSize(new Dimension(300, 35));
+        loginUsernameField.setAlignmentX(Component.CENTER_ALIGNMENT);
+        loginUsernameField.setHorizontalAlignment(JTextField.CENTER);
+        panel.add(loginUsernameField);
         panel.add(Box.createVerticalStrut(20));
         
         // Password Label
@@ -120,12 +128,12 @@ public class LoginFrame extends JFrame {
         panel.add(Box.createVerticalStrut(5));
         
         // Password Field
-        passwordField = new JPasswordField();
-        passwordField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        passwordField.setMaximumSize(new Dimension(300, 35));
-        passwordField.setAlignmentX(Component.CENTER_ALIGNMENT);
-        passwordField.setHorizontalAlignment(JTextField.CENTER);
-        panel.add(passwordField);
+        loginPasswordField = new JPasswordField();
+        loginPasswordField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        loginPasswordField.setMaximumSize(new Dimension(300, 35));
+        loginPasswordField.setAlignmentX(Component.CENTER_ALIGNMENT);
+        loginPasswordField.setHorizontalAlignment(JTextField.CENTER);
+        panel.add(loginPasswordField);
         panel.add(Box.createVerticalStrut(30));
         
         // Login button
@@ -174,68 +182,64 @@ public class LoginFrame extends JFrame {
         panel.add(titleLabel);
         panel.add(Box.createVerticalStrut(30));
         
-        // Username
+        // Username Label
         JLabel userLabel = new JLabel("Username");
         userLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        userLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(userLabel);
         panel.add(Box.createVerticalStrut(5));
         
-        JTextField regUsernameField = new JTextField();
-        regUsernameField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        regUsernameField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
-        panel.add(regUsernameField);
-        panel.add(Box.createVerticalStrut(15));
+        // Username Field
+        registerUsernameField = new JTextField();
+        registerUsernameField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        registerUsernameField.setMaximumSize(new Dimension(300, 35));
+        registerUsernameField.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(registerUsernameField);
+        panel.add(Box.createVerticalStrut(20));
         
-        // Email
-        JLabel emailLabel = new JLabel("Email");
-        emailLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        panel.add(emailLabel);
-        panel.add(Box.createVerticalStrut(5));
-        
-        emailField = new JTextField();
-        emailField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        emailField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
-        panel.add(emailField);
-        panel.add(Box.createVerticalStrut(15));
-        
-        // Password
+        // Password Label
         JLabel passLabel = new JLabel("Password");
         passLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        passLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(passLabel);
         panel.add(Box.createVerticalStrut(5));
         
-        JPasswordField regPasswordField = new JPasswordField();
-        regPasswordField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        regPasswordField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
-        panel.add(regPasswordField);
-        panel.add(Box.createVerticalStrut(25));
+        // Password Field
+        registerPasswordField = new JPasswordField();
+        registerPasswordField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        registerPasswordField.setMaximumSize(new Dimension(300, 35));
+        registerPasswordField.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(registerPasswordField);
+        panel.add(Box.createVerticalStrut(30));
         
         // Register button
         registerButton = new JButton("Create Account");
         registerButton.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        registerButton.setBackground(new Color(52, 168, 83));
+        registerButton.setBackground(new Color(34, 139, 34));
         registerButton.setForeground(Color.WHITE);
         registerButton.setFocusPainted(false);
-        registerButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 45));
+        registerButton.setMaximumSize(new Dimension(300, 45));
+        registerButton.setAlignmentX(Component.CENTER_ALIGNMENT);
         registerButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        registerButton.addActionListener(e -> handleRegister(regUsernameField, regPasswordField, emailField));
+        registerButton.addActionListener(e -> handleRegister());
         panel.add(registerButton);
-        panel.add(Box.createVerticalStrut(15));
+        panel.add(Box.createVerticalStrut(20));
         
         // Switch to login
         JPanel switchPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         switchPanel.setOpaque(false);
+        switchPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
         JLabel switchLabel = new JLabel("Already have an account? ");
         switchLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        JButton switchButton = new JButton("Login");
-        switchButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        switchButton.setForeground(new Color(66, 133, 244));
-        switchButton.setBorderPainted(false);
-        switchButton.setContentAreaFilled(false);
-        switchButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        switchButton.addActionListener(e -> switchToLogin());
+        switchModeButton = new JButton("Sign In");
+        switchModeButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        switchModeButton.setForeground(new Color(66, 133, 244));
+        switchModeButton.setBorderPainted(false);
+        switchModeButton.setContentAreaFilled(false);
+        switchModeButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        switchModeButton.addActionListener(e -> switchToLogin());
         switchPanel.add(switchLabel);
-        switchPanel.add(switchButton);
+        switchPanel.add(switchModeButton);
         panel.add(switchPanel);
         
         return panel;
@@ -252,8 +256,8 @@ public class LoginFrame extends JFrame {
     }
     
     private void handleLogin() {
-        String username = usernameField.getText().trim();
-        String password = new String(passwordField.getPassword());
+        String username = loginUsernameField.getText().trim();
+        String password = new String(loginPasswordField.getPassword());
         
         if (username.isEmpty() || password.isEmpty()) {
             JOptionPane.showMessageDialog(this, 
@@ -277,33 +281,90 @@ public class LoginFrame extends JFrame {
         }
     }
     
-    private void handleRegister(JTextField regUsernameField, JPasswordField regPasswordField, JTextField emailField) {
-        String username = regUsernameField.getText().trim();
-        String password = new String(regPasswordField.getPassword());
-        String email = emailField.getText().trim();
+    private void handleRegister() {
+        String username = registerUsernameField.getText().trim();
+        String password = new String(registerPasswordField.getPassword());
         
-        if (username.isEmpty() || password.isEmpty() || email.isEmpty()) {
-            JOptionPane.showMessageDialog(this, 
-                "Please fill in all fields", 
-                "Error", JOptionPane.ERROR_MESSAGE);
+        if (username.isEmpty() || password.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Please fill in all fields",
+                    "Registration Error",
+                    JOptionPane.ERROR_MESSAGE);
             return;
         }
         
         if (userDatabase.containsKey(username)) {
-            JOptionPane.showMessageDialog(this, 
-                "Username already exists", 
-                "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Username already exists",
+                    "Registration Error",
+                    JOptionPane.ERROR_MESSAGE);
             return;
         }
         
-        // Create new user
-        User newUser = new User(username, password, email);
+        // Create new user (email not required anymore)
+        User newUser = new User(username, password, "");
         userDatabase.put(username, newUser);
+        saveUsers();
         
-        JOptionPane.showMessageDialog(this, 
-            "Account created successfully! Please login.", 
-            "Success", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(this,
+                "Registration successful! Please login.",
+                "Success",
+                JOptionPane.INFORMATION_MESSAGE);
         
         switchToLogin();
+    }
+    
+    /**
+     * Save users to file
+     */
+    private void saveUsers() {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(USERS_FILE))) {
+            for (Map.Entry<String, User> entry : userDatabase.entrySet()) {
+                User user = entry.getValue();
+                // Format: username:password:email
+                writer.write(user.getUsername() + ":" + user.getPassword() + ":" + user.getEmail());
+                writer.newLine();
+            }
+            System.out.println("✅ Users saved successfully to " + USERS_FILE);
+        } catch (IOException e) {
+            System.err.println("❌ Error saving users: " + e.getMessage());
+            JOptionPane.showMessageDialog(this,
+                    "Error saving user data: " + e.getMessage(),
+                    "Save Error",
+                    JOptionPane.WARNING_MESSAGE);
+        }
+    }
+    
+    /**
+     * Load users from file
+     */
+    private void loadUsers() {
+        File file = new File(USERS_FILE);
+        if (!file.exists()) {
+            System.out.println("ℹ️ No existing users file found. Starting fresh.");
+            return;
+        }
+        
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            int count = 0;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                
+                String[] parts = line.split(":");
+                if (parts.length >= 2) {
+                    String username = parts[0];
+                    String password = parts[1];
+                    String email = parts.length > 2 ? parts[2] : "";
+                    
+                    userDatabase.put(username, new User(username, password, email));
+                    count++;
+                }
+            }
+            System.out.println("✅ Loaded " + count + " users from " + USERS_FILE);
+        } catch (IOException e) {
+            System.err.println("❌ Error loading users: " + e.getMessage());
+        }
     }
 }

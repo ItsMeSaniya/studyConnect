@@ -12,8 +12,6 @@ if not exist target\StudyConnect-1.0.0.jar (
     exit /b 1
 )
 
-@echo off
 REM Run StudyConnect P2P Application
-
 java -cp "target\StudyConnect-1.0.0.jar;target\lib\*" main.StudyConnectMain
 pause

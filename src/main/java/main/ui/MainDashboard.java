@@ -156,8 +156,8 @@ public class MainDashboard extends JFrame implements MessageHandler {
         topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
         topPanel.setBackground(Color.WHITE);
         
-        // Server control panel - ONLY FOR ADMIN
         if (isAdmin) {
+            // Admin panel - Server Control ONLY
             JPanel serverPanel = new JPanel();
             serverPanel.setLayout(new BoxLayout(serverPanel, BoxLayout.Y_AXIS));
             serverPanel.setBackground(Color.WHITE);
@@ -204,29 +204,70 @@ public class MainDashboard extends JFrame implements MessageHandler {
             serverPanel.add(stopServerButton);
             
             topPanel.add(serverPanel);
-            topPanel.add(Box.createVerticalStrut(10));
+        } else {
+            // Client panel - Connect to Server
+            JPanel connectPanel = new JPanel();
+            connectPanel.setLayout(new BoxLayout(connectPanel, BoxLayout.Y_AXIS));
+            connectPanel.setBackground(Color.WHITE);
+            connectPanel.setBorder(BorderFactory.createTitledBorder(
+                new LineBorder(new Color(200, 200, 200)), "Connect to Server"));
+            
+            // Server IP input
+            JPanel ipPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            ipPanel.setOpaque(false);
+            ipPanel.add(new JLabel("Server IP:"));
+            JTextField serverIpField = new JTextField("127.0.0.1", 12);
+            ipPanel.add(serverIpField);
+            ipPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            
+            // Port input
+            JPanel portPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            portPanel.setOpaque(false);
+            portPanel.add(new JLabel("Port:"));
+            JTextField serverPortField = new JTextField("8888", 8);
+            portPanel.add(serverPortField);
+            portPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            
+            // Connect button
+            JButton connectToServerButton = new JButton("Connect to Server");
+            connectToServerButton.setBackground(new Color(66, 133, 244));
+            connectToServerButton.setForeground(Color.WHITE);
+            connectToServerButton.setFocusPainted(false);
+            connectToServerButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+            connectToServerButton.setMaximumSize(new Dimension(200, 35));
+            connectToServerButton.addActionListener(e -> {
+                String ip = serverIpField.getText().trim();
+                String portStr = serverPortField.getText().trim();
+                
+                if (ip.isEmpty() || portStr.isEmpty()) {
+                    JOptionPane.showMessageDialog(this, 
+                        "Please enter server IP and port", 
+                        "Connection Error", 
+                        JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                
+                try {
+                    int port = Integer.parseInt(portStr);
+                    connectToPeer(ip, port);
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, 
+                        "Invalid port number", 
+                        "Connection Error", 
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            });
+            
+            connectPanel.add(ipPanel);
+            connectPanel.add(Box.createVerticalStrut(5));
+            connectPanel.add(portPanel);
+            connectPanel.add(Box.createVerticalStrut(10));
+            connectPanel.add(connectToServerButton);
+            
+            topPanel.add(connectPanel);
         }
         
-        // Peer connection panel - FOR ALL USERS
-        JPanel peerPanel = new JPanel();
-        peerPanel.setLayout(new BoxLayout(peerPanel, BoxLayout.Y_AXIS));
-        peerPanel.setBackground(Color.WHITE);
-        peerPanel.setBorder(BorderFactory.createTitledBorder(
-            new LineBorder(new Color(200, 200, 200)), "Connect to Peer"));
-        
-        connectPeerButton = new JButton("Connect to Peer");
-        connectPeerButton.setBackground(new Color(66, 133, 244));
-        connectPeerButton.setForeground(Color.WHITE);
-        connectPeerButton.setFocusPainted(false);
-        connectPeerButton.setAlignmentX(Component.LEFT_ALIGNMENT);
-        connectPeerButton.setMaximumSize(new Dimension(200, 35));
-        connectPeerButton.addActionListener(e -> connectToPeer());
-        
-        peerPanel.add(connectPeerButton);
-        
-        topPanel.add(peerPanel);
-        
-        // Connected peers list
+        // Connected peers list (for both admin and client)
         JPanel peerListPanel = new JPanel(new BorderLayout());
         peerListPanel.setBackground(Color.WHITE);
         peerListPanel.setBorder(BorderFactory.createTitledBorder(
@@ -591,6 +632,54 @@ public class MainDashboard extends JFrame implements MessageHandler {
         portField.setEnabled(true);
     }
     
+    // Overloaded method that accepts IP and port directly
+    private void connectToPeer(String ip, int port) {
+        if (!NetworkUtil.isValidIPAddress(ip)) {
+            JOptionPane.showMessageDialog(this,
+                "Please enter a valid IP address",
+                "Invalid IP", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        if (!NetworkUtil.isValidPort(port)) {
+            JOptionPane.showMessageDialog(this,
+                "Please enter a valid port (1024-65535)",
+                "Invalid Port", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        try {
+            Client client = new Client(ip, port, this, currentUser.getUsername());
+            if (client.connect()) {
+                connectedPeers.add(client);
+                peerListModel.addElement(ip + ":" + port);
+                
+                // Send greeting message
+                Message greeting = new Message(currentUser.getUsername(), "all",
+                    currentUser.getUsername() + " has joined the chat",
+                    Message.MessageType.USER_JOIN);
+                client.sendMessage(greeting);
+                
+                // Update peer selector to show server/admin
+                SwingUtilities.invokeLater(() -> {
+                    peerSelector.removeAllItems();
+                    peerSelector.addItem("Select a peer...");
+                    peerSelector.addItem("Server (Admin)");
+                    
+                    // Store server connection for P2P messaging
+                    String peerAddress = ip + ":" + port;
+                    peerUsernames.put(peerAddress, "Server (Admin)");
+                });
+                
+                appendToChat("[SYSTEM] ✅ Connected to " + ip + ":" + port);
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                "Failed to connect: " + e.getMessage(),
+                "Connection Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
     private void connectToPeer() {
         JPanel panel = new JPanel(new GridLayout(2, 2, 10, 10));
         panel.add(new JLabel("IP Address:"));
@@ -608,32 +697,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
             
             try {
                 int port = Integer.parseInt(peerPortField.getText());
-                
-                if (!NetworkUtil.isValidIPAddress(ip)) {
-                    JOptionPane.showMessageDialog(this,
-                        "Please enter a valid IP address",
-                        "Invalid IP", JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
-                
-                if (!NetworkUtil.isValidPort(port)) {
-                    JOptionPane.showMessageDialog(this,
-                        "Please enter a valid port (1024-65535)",
-                        "Invalid Port", JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
-                
-                Client client = new Client(ip, port, this, currentUser.getUsername());
-                if (client.connect()) {
-                    connectedPeers.add(client);
-                    peerListModel.addElement(ip + ":" + port);
-                    
-                    // Send greeting message
-                    Message greeting = new Message(currentUser.getUsername(), "all",
-                        currentUser.getUsername() + " has joined the chat",
-                        Message.MessageType.USER_JOIN);
-                    client.sendMessage(greeting);
-                }
+                connectToPeer(ip, port); // Use the overloaded method
                 
             } catch (NumberFormatException e) {
                 JOptionPane.showMessageDialog(this,
@@ -676,45 +740,19 @@ public class MainDashboard extends JFrame implements MessageHandler {
             return;
         }
         
-        Message message = new Message(currentUser.getUsername(), selectedPeer, text, Message.MessageType.PEER_TO_PEER);
+        // Create P2P message with target username
+        Message message = new Message(currentUser.getUsername(), selectedPeer, 
+            text, Message.MessageType.PEER_TO_PEER);
         
-        // Find and send to specific peer by username
-        boolean sent = false;
-        
-        // Check if sending to "Server (Admin)"
-        if (selectedPeer.equals("Server (Admin)")) {
-            // Send to first connected peer (which is the server)
-            if (!connectedPeers.isEmpty()) {
-                connectedPeers.get(0).sendMessage(message);
-                sent = true;
-            }
-        } else {
-            // Check server connections (by username)
-            PeerConnection targetPeer = peerConnections.get(selectedPeer);
-            if (targetPeer != null) {
-                targetPeer.sendMessage(message);
-                sent = true;
-            } else {
-                // Check client connections (by username)
-                for (Client client : connectedPeers) {
-                    String peerAddress = client.getHost() + ":" + client.getPort();
-                    String username = peerUsernames.get(peerAddress);
-                    if (selectedPeer.equals(username)) {
-                        client.sendMessage(message);
-                        sent = true;
-                        break;
-                    }
-                }
-            }
-        }
-        
-        if (sent) {
+        // Send through server (first connected peer is always the server)
+        if (!connectedPeers.isEmpty()) {
+            connectedPeers.get(0).sendMessage(message);
             appendToP2PChat("You → " + selectedPeer + ": " + text);
             p2pMessageField.setText("");
         } else {
             JOptionPane.showMessageDialog(this,
-                "Failed to send message to " + selectedPeer,
-                "Send Failed", JOptionPane.ERROR_MESSAGE);
+                "Not connected to server!",
+                "Connection Error", JOptionPane.ERROR_MESSAGE);
         }
     }
     
@@ -860,15 +898,12 @@ public class MainDashboard extends JFrame implements MessageHandler {
             boolean isAdmin = currentUser.getUsername().equalsIgnoreCase("admin") && 
                               currentUser.getPassword().equals("admin");
             
-            // If this is admin (server), show "Server" in the list
-            if (isAdmin) {
-                // Don't add self to peer selector
-            } else {
-                // Non-admin can send to server (admin)
+            // If this is NOT admin (client), add "Server (Admin)" option
+            if (!isAdmin && !connectedPeers.isEmpty()) {
                 peerSelector.addItem("Server (Admin)");
             }
             
-            // Add all server connections with usernames
+            // Add all server connections with usernames (admin side)
             for (Map.Entry<PeerConnection, String> entry : connectionUsernames.entrySet()) {
                 String username = entry.getValue();
                 if (!username.equals(currentUser.getUsername())) {
@@ -878,11 +913,12 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 }
             }
             
-            // Add all connected clients with usernames
+            // Add all connected clients with usernames (client side)
             for (Client client : connectedPeers) {
                 String peerAddress = client.getHost() + ":" + client.getPort();
                 String username = peerUsernames.get(peerAddress);
-                if (username != null && !username.equals(currentUser.getUsername())) {
+                if (username != null && !username.equals(currentUser.getUsername()) 
+                    && !username.equals("Server (Admin)")) {
                     peerSelector.addItem(username);
                 }
             }
@@ -892,119 +928,190 @@ public class MainDashboard extends JFrame implements MessageHandler {
     // MessageHandler implementation
     @Override
     public void onMessageReceived(Message message, PeerConnection connection) {
-        SwingUtilities.invokeLater(() -> {
-            switch (message.getType()) {
-                case TEXT:
-                    appendToChat(message.getSender() + ": " + message.getContent());
-                    break;
-                    
-                case BROADCAST:
-                    appendToBroadcast("[BROADCAST] " + message.getSender() + ": " + message.getContent());
-                    appendToChat("[BROADCAST] " + message.getSender() + ": " + message.getContent());
-                    break;
-                    
-                case PEER_TO_PEER:
-                    appendToP2PChat(message.getSender() + " → You: " + message.getContent());
-                    break;
-                    
-                case QUIZ_START:
-                    // New quiz started
-                    Quiz quiz = message.getQuizData();
-                    if (quiz != null && quizParticipationPanel != null) {
-                        activeQuiz = quiz;
-                        quizParticipationPanel.startQuiz(quiz);
-                        appendToChat("[QUIZ] New quiz available: " + quiz.getTitle());
-                        JOptionPane.showMessageDialog(this,
-                            "New quiz started: " + quiz.getTitle() + 
-                            "\nGo to 'Take Quiz' tab to participate!",
-                            "Quiz Notification", JOptionPane.INFORMATION_MESSAGE);
-                        // Automatically switch to quiz tab
-                        tabbedPane.setSelectedIndex(4); // Quiz participation tab
+        switch (message.getType()) {
+            case TEXT:
+                appendToChat(message.getSender() + ": " + message.getContent());
+                break;
+                
+            case BROADCAST:
+                appendToBroadcast("[BROADCAST] " + message.getSender() + ": " + message.getContent());
+                break;
+                
+            case PEER_TO_PEER:
+                // Display received P2P message
+                appendToP2PChat(message.getSender() + " → You: " + message.getContent());
+                break;
+                
+            case USER_JOIN:
+                // Track username for this connection
+                String username = message.getSender();
+                String peerAddr = connection.getPeerAddress();
+                connectionUsernames.put(connection, username);
+                peerUsernames.put(peerAddr, username);
+                
+                // Update peer list with username
+                boolean found = false;
+                for (int i = 0; i < peerListModel.size(); i++) {
+                    if (peerListModel.get(i).contains(peerAddr)) {
+                        peerListModel.set(i, username + " (" + peerAddr + ")");
+                        found = true;
+                        break;
                     }
-                    break;
+                }
+                if (!found) {
+                    peerListModel.addElement(username + " (" + peerAddr + ")");
+                }
+                
+                // Show connection message
+                boolean isAdmin = currentUser.getUsername().equalsIgnoreCase("admin") && 
+                                  currentUser.getPassword().equals("admin");
+                if (isAdmin) {
+                    appendToChat("[SYSTEM] Client connected: " + username + " (" + peerAddr + ")");
+                } else {
+                    appendToChat("[SYSTEM] " + message.getContent());
+                }
+                
+                // Update peer selector with username
+                updatePeerSelector(connection);
+                break;
+                
+            case USER_LEAVE:
+                String leavingUser = connectionUsernames.get(connection);
+                if (leavingUser != null) {
+                    appendToChat("[SYSTEM] " + leavingUser + " has left");
+                    connectionUsernames.remove(connection);
                     
-                case QUIZ_ANSWER:
-                    // Quiz answer received
-                    QuizAnswer answer = message.getQuizAnswer();
-                    if (answer != null && activeQuiz != null) {
-                        QuizResult result = activeQuiz.gradeQuiz(answer);
-                        result = new QuizResult(activeQuiz.getId(), message.getSender(),
-                            activeQuiz.getQuestions().size(), result.getCorrectAnswers(),
-                            activeQuiz.getTotalPoints(), result.getEarnedPoints());
-                        quizResults.put(message.getSender(), result);
-                        
-                        // Send result back to participant
-                        Message resultMsg = new Message("System", message.getSender(),
-                            "Quiz result", Message.MessageType.QUIZ_RESULT);
-                        resultMsg.setQuizResult(result);
-                        connection.sendMessage(resultMsg);
-                        
-                        updateLeaderboard();
-                        appendToChat("[QUIZ] " + message.getSender() + " completed the quiz");
-                    }
-                    break;
-                    
-                case QUIZ_RESULT:
-                    // Quiz result received
-                    QuizResult myResult = message.getQuizResult();
-                    if (myResult != null) {
-                        JOptionPane.showMessageDialog(this,
-                            String.format("Quiz Results:\n\n" +
-                                "Correct Answers: %d / %d\n" +
-                                "Points Earned: %d / %d\n" +
-                                "Percentage: %.1f%%\n" +
-                                "Grade: %s",
-                                myResult.getCorrectAnswers(), myResult.getTotalQuestions(),
-                                myResult.getEarnedPoints(), myResult.getTotalPoints(),
-                                myResult.getPercentage(), myResult.getGrade()),
-                            "Your Quiz Results", JOptionPane.INFORMATION_MESSAGE);
-                    }
-                    break;
-                    
-                case USER_JOIN:
-                    // Track username for this connection
-                    String username = message.getSender();
-                    String peerAddr = connection.getPeerAddress();
-                    connectionUsernames.put(connection, username);
-                    peerUsernames.put(peerAddr, username);
-                    
-                    // Update peer list with username
-                    boolean found = false;
+                    // Remove from peer list
                     for (int i = 0; i < peerListModel.size(); i++) {
-                        if (peerListModel.get(i).contains(peerAddr)) {
-                            peerListModel.set(i, username + " (" + peerAddr + ")");
-                            found = true;
+                        if (peerListModel.get(i).contains(leavingUser)) {
+                            peerListModel.remove(i);
                             break;
                         }
                     }
-                    if (!found) {
-                        peerListModel.addElement(username + " (" + peerAddr + ")");
+                }
+                break;
+                
+            case PEER_LIST:
+                // Received list of connected peers from server
+                String[] peers = message.getContent().split(",");
+                
+                SwingUtilities.invokeLater(() -> {
+                    peerSelector.removeAllItems();
+                    peerSelector.addItem("Select a peer...");
+                    
+                    for (String peer : peers) {
+                        if (!peer.trim().isEmpty() && 
+                            !peer.trim().equals(currentUser.getUsername())) {
+                            peerSelector.addItem(peer.trim());
+                        }
                     }
                     
-                    // Show connection message
-                    boolean isAdmin = currentUser.getUsername().equalsIgnoreCase("admin") && 
+                    System.out.println("[DEBUG] Updated peer list: " + Arrays.toString(peers));
+                });
+                break;
+                
+            case QUIZ_START:
+                // New quiz started
+                Quiz quiz = message.getQuizData();
+                if (quiz != null && quizParticipationPanel != null) {
+                    activeQuiz = quiz;
+                    quizParticipationPanel.startQuiz(quiz);
+                    appendToChat("[QUIZ] New quiz available: " + quiz.getTitle());
+                    JOptionPane.showMessageDialog(this,
+                        "New quiz started: " + quiz.getTitle() + 
+                        "\nGo to 'Take Quiz' tab to participate!",
+                        "Quiz Notification", JOptionPane.INFORMATION_MESSAGE);
+                    
+                    // Automatically switch to quiz tab (non-admin only)
+                    boolean isAdminUser = currentUser.getUsername().equalsIgnoreCase("admin") && 
                                       currentUser.getPassword().equals("admin");
-                    if (isAdmin) {
-                        appendToChat("[SYSTEM] Client connected: " + username + " (" + peerAddr + ")");
-                    } else {
-                        appendToChat("[SYSTEM] " + message.getContent());
+                    if (!isAdminUser) {
+                        // For non-admin users, "Take Quiz" tab is at index 3
+                        tabbedPane.setSelectedIndex(3);
+                    }
+                }
+                break;
+                
+            case QUIZ_ANSWER:
+                // Quiz answer received (admin side)
+                QuizAnswer answer = message.getQuizAnswer();
+                if (answer != null && activeQuiz != null) {
+                    // Calculate the score based on correct answers
+                    int correctCount = 0;
+                    int totalPoints = 0;
+                    int earnedPoints = 0;
+                    
+                    List<QuizQuestion> questions = activeQuiz.getQuestions();
+                    for (int i = 0; i < questions.size(); i++) {
+                        QuizQuestion question = questions.get(i);
+                        Integer userAnswer = answer.getAnswers().get(i);
+                        
+                        totalPoints += question.getPoints();
+                        
+                        if (userAnswer != null && userAnswer == question.getCorrectAnswer()) {
+                            correctCount++;
+                            earnedPoints += question.getPoints();
+                        }
                     }
                     
-                    // Update peer selector with username
-                    updatePeerSelector(connection);
-                    break;
+                    // Create quiz result
+                    QuizResult result = new QuizResult(
+                        activeQuiz.getId(),
+                        message.getSender(),
+                        questions.size(),
+                        correctCount,
+                        totalPoints,
+                        earnedPoints
+                    );
                     
-                case USER_LEAVE:
-                    appendToChat("[SYSTEM] " + message.getContent());
-                    // Update peer selector
-                    updatePeerSelector(connection);
-                    break;
+                    quizResults.put(message.getSender(), result);
+                    updateLeaderboard();
+                    appendToChat("[QUIZ] " + message.getSender() + " completed the quiz. Score: " + 
+                        result.getEarnedPoints() + "/" + result.getTotalPoints());
                     
-                default:
-                    appendToChat(message.getSender() + ": " + message.getContent());
-                    break;
-            }
-        });
+                    // Send result back to the client
+                    Message resultMsg = new Message("Server", message.getSender(),
+                        "Quiz completed", Message.MessageType.QUIZ_RESULT);
+                    resultMsg.setQuizResult(result);
+                    connection.sendMessage(resultMsg);
+                }
+                break;
+                
+            case QUIZ_RESULT:
+                // Quiz result received
+                QuizResult myResult = message.getQuizResult();
+                if (myResult != null) {
+                    // Store the result in the local quizResults map
+                    quizResults.put(currentUser.getUsername(), myResult);
+                    
+                    // Update the leaderboard to show the result
+                    updateLeaderboard();
+                    
+                    // Switch to leaderboard tab to show results
+                    boolean isAdminUser = currentUser.getUsername().equalsIgnoreCase("admin") && 
+                                      currentUser.getPassword().equals("admin");
+                    if (!isAdminUser) {
+                        // For non-admin users, "Leaderboard" tab is at index 4
+                        tabbedPane.setSelectedIndex(4);
+                    }
+                    
+                    // Show result dialog
+                    JOptionPane.showMessageDialog(this,
+                        String.format("Quiz Results:\n\n" +
+                            "Correct Answers: %d / %d\n" +
+                            "Points Earned: %d / %d\n" +
+                            "Percentage: %.1f%%\n" +
+                            "Grade: %s",
+                            myResult.getCorrectAnswers(), myResult.getTotalQuestions(),
+                            myResult.getEarnedPoints(), myResult.getTotalPoints(),
+                            myResult.getPercentage(), myResult.getGrade()),
+                        "Your Quiz Results", JOptionPane.INFORMATION_MESSAGE);
+                }
+                break;
+                
+            default:
+                break;
+        }
     }
     
     @Override
