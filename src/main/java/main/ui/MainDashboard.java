@@ -6,7 +6,6 @@ import main.network.MessageHandler;
 import main.network.NotificationClient;
 import main.network.PeerConnection;
 import main.network.Server;
-import main.network.FileTransferManager;
 import main.util.NetworkUtil;
 
 import javax.swing.*;
@@ -27,10 +26,6 @@ public class MainDashboard extends JFrame implements MessageHandler {
     private Map<String, String> peerUsernames; // Map IP:Port -> Username
     private Map<PeerConnection, String> connectionUsernames; // Map Connection -> Username
     private NotificationClient notificationClient;
-    
-    // File Sharing components
-    private FileSharingPanel fileSharingPanel;
-    private FileTransferManager fileTransferManager;
     
     // Group Chat components
     private JTextArea chatArea;
@@ -74,9 +69,6 @@ public class MainDashboard extends JFrame implements MessageHandler {
         this.connectionUsernames = new HashMap<>();
         this.peerListModel = new DefaultListModel<>();
         this.quizResults = new HashMap<>();
-        
-        // Initialize File Transfer Manager
-        this.fileTransferManager = new FileTransferManager();
         
         // Start UDP listener for notifications - but don't show popups
         notificationClient = new NotificationClient(msg -> {
@@ -320,14 +312,14 @@ public class MainDashboard extends JFrame implements MessageHandler {
         tabbedPane = new JTabbedPane();
         tabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         
-        // Tab 1: Group Chat & File Sharing
-        tabbedPane.addTab("💬 Group Chat", createGroupChatTab());
+        // Tab 1: Study Group Chat
+        tabbedPane.addTab("Study Chat", createGroupChatTab());
+
+        // Tab 2: Resource Sharing
+        tabbedPane.addTab("Resources", createFileSharingTab());
         
-        // Tab 2: Peer-to-Peer Chat
-        tabbedPane.addTab("👥 P2P Chat", createP2PChatTab());
-        
-        // Tab 3: Broadcast
-        tabbedPane.addTab("📢 Broadcast", createBroadcastTab());
+        // Tab 3: Announcements
+        tabbedPane.addTab("Announcements", createBroadcastTab());
         
         // Tab 4: Create Quiz (admin only)
         if (isAdmin) {
@@ -719,6 +711,54 @@ public class MainDashboard extends JFrame implements MessageHandler {
         portField.setEnabled(true);
     }
     
+    // Overloaded method that accepts IP and port directly
+    private void connectToPeer(String ip, int port) {
+        if (!NetworkUtil.isValidIPAddress(ip)) {
+            JOptionPane.showMessageDialog(this,
+                "Please enter a valid IP address",
+                "Invalid IP", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        if (!NetworkUtil.isValidPort(port)) {
+            JOptionPane.showMessageDialog(this,
+                "Please enter a valid port (1024-65535)",
+                "Invalid Port", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        try {
+            Client client = new Client(ip, port, this, currentUser.getUsername());
+            if (client.connect()) {
+                connectedPeers.add(client);
+                peerListModel.addElement(ip + ":" + port);
+                
+                // Send USER_JOIN message to let server know our username
+                Message greeting = new Message(currentUser.getUsername(), "all",
+                    currentUser.getUsername() + " has joined",
+                    Message.MessageType.USER_JOIN);
+                client.sendMessage(greeting);
+                
+                // Update file selector to show server/admin
+                SwingUtilities.invokeLater(() -> {
+                    fileTargetSelector.removeAllItems();
+                    fileTargetSelector.addItem("Select recipient...");
+                    fileTargetSelector.addItem("Server (Admin)");
+                    
+                    // Store server connection for file sharing
+                    String peerAddress = ip + ":" + port;
+                    peerUsernames.put(peerAddress, "Server (Admin)");
+                });
+                
+                appendToChat("[SYSTEM] ✅ Connected to " + ip + ":" + port);
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                "Failed to connect: " + e.getMessage(),
+                "Connection Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
     private void connectToPeer() {
         JPanel panel = new JPanel(new GridLayout(2, 2, 10, 10));
         panel.add(new JLabel("IP Address:"));
@@ -736,32 +776,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
             
             try {
                 int port = Integer.parseInt(peerPortField.getText());
-                
-                if (!NetworkUtil.isValidIPAddress(ip)) {
-                    JOptionPane.showMessageDialog(this,
-                        "Please enter a valid IP address",
-                        "Invalid IP", JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
-                
-                if (!NetworkUtil.isValidPort(port)) {
-                    JOptionPane.showMessageDialog(this,
-                        "Please enter a valid port (1024-65535)",
-                        "Invalid Port", JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
-                
-                Client client = new Client(ip, port, this, currentUser.getUsername());
-                if (client.connect()) {
-                    connectedPeers.add(client);
-                    peerListModel.addElement(ip + ":" + port);
-                    
-                    // Send greeting message
-                    Message greeting = new Message(currentUser.getUsername(), "all",
-                        currentUser.getUsername() + " has joined the chat",
-                        Message.MessageType.USER_JOIN);
-                    client.sendMessage(greeting);
-                }
+                connectToPeer(ip, port); // Use the overloaded method
                 
             } catch (NumberFormatException e) {
                 JOptionPane.showMessageDialog(this,
@@ -1121,80 +1136,69 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     appendToChat(message.getSender() + ": " + message.getContent());
                 }
                 break;
-                    
+                
             case BROADCAST:
-                appendToBroadcast("[BROADCAST] " + message.getSender() + ": " + message.getContent());
-                appendToChat("[BROADCAST] " + message.getSender() + ": " + message.getContent());
-                break;
+                // Don't show our own broadcasts again
+                if (!message.getSender().equals(currentUser.getUsername())) {
+                    String content = message.getContent();
                     
-            case PEER_TO_PEER:
-                appendToP2PChat(message.getSender() + " → You: " + message.getContent());
-                break;
+                    System.out.println("[DEBUG BROADCAST] Received from: " + message.getSender());
+                    System.out.println("[DEBUG BROADCAST] Content contains leaderboard: " + content.contains("🏆 QUIZ LEADERBOARD 🏆"));
+                    System.out.println("[DEBUG BROADCAST] studentLeaderboardArea null?: " + (studentLeaderboardArea == null));
                     
-            case QUIZ_START:
-                // New quiz started
-                Quiz quiz = message.getQuizData();
-                if (quiz != null && quizParticipationPanel != null) {
-                    activeQuiz = quiz;
-                    quizParticipationPanel.startQuiz(quiz);
-                    appendToChat("[QUIZ] New quiz available: " + quiz.getTitle());
-                    JOptionPane.showMessageDialog(this,
-                        "New quiz started: " + quiz.getTitle() + 
-                        "\nGo to 'Take Quiz' tab to participate!",
-                        "Quiz Notification", JOptionPane.INFORMATION_MESSAGE);
-                    // Automatically switch to quiz tab
-                    tabbedPane.setSelectedIndex(4); // Quiz participation tab
+                    // Check if this is a shared leaderboard (starts with specific markers)
+                    if (content.contains("QUIZ LEADERBOARD") && studentLeaderboardArea != null) {
+                        System.out.println("[DEBUG BROADCAST] Updating student leaderboard!");
+                        // Update student leaderboard tab and switch to it
+                        SwingUtilities.invokeLater(() -> {
+                            studentLeaderboardArea.setText(content);
+                            // Auto-switch to leaderboard tab (index 4 for students: Chat, File, Broadcast, Take Quiz, Leaderboard)
+                            tabbedPane.setSelectedIndex(4);
+                            System.out.println("[DEBUG BROADCAST] Leaderboard tab updated and switched!");
+                        });
+                    } else {
+                        System.out.println("[DEBUG BROADCAST] Showing in broadcast tab only");
+                        // Only show in broadcast tab, not in chat
+                        appendToBroadcast("[BROADCAST] " + message.getSender() + ": " + content);
+                    }
                 }
                 break;
+                
+            case FILE:
+                // File received
+                FileTransfer fileTransfer = message.getFileTransfer();
+                if (fileTransfer != null) {
+                    String sender = message.getSender();
+                    String fileName = fileTransfer.getFileName();
+                    long fileSize = fileTransfer.getFileData().length;
                     
-            case QUIZ_ANSWER:
-                // Quiz answer received
-                QuizAnswer answer = message.getQuizAnswer();
-                if (answer != null && activeQuiz != null) {
-                    QuizResult result = activeQuiz.gradeQuiz(answer);
-                    result = new QuizResult(activeQuiz.getId(), message.getSender(),
-                        activeQuiz.getQuestions().size(), result.getCorrectAnswers(),
-                        activeQuiz.getTotalPoints(), result.getEarnedPoints());
-                    quizResults.put(message.getSender(), result);
+                    appendToFileHistory("[" + getCurrentTime() + "] Received '" + fileName + 
+                        "' from " + sender + " (" + formatFileSize(fileSize) + ")");
                     
-                    // Send result back to participant
-                    Message resultMsg = new Message("System", message.getSender(),
-                        "Quiz result", Message.MessageType.QUIZ_RESULT);
-                    resultMsg.setQuizResult(result);
-                    connection.sendMessage(resultMsg);
-                    
-                    updateLeaderboard();
-                    appendToChat("[QUIZ] " + message.getSender() + " completed the quiz");
+                    // Show download dialog
+                    SwingUtilities.invokeLater(() -> {
+                        int choice = JOptionPane.showConfirmDialog(this,
+                            "Received file: " + fileName + "\n" +
+                            "From: " + sender + "\n" +
+                            "Size: " + formatFileSize(fileSize) + "\n\n" +
+                            "Do you want to save this file?",
+                            "File Received", 
+                            JOptionPane.YES_NO_OPTION,
+                            JOptionPane.QUESTION_MESSAGE);
+                        
+                        if (choice == JOptionPane.YES_OPTION) {
+                            saveReceivedFile(fileTransfer);
+                        }
+                    });
                 }
                 break;
-                    
-            case QUIZ_RESULT:
-                // Quiz result received
-                QuizResult myResult = message.getQuizResult();
-                if (myResult != null) {
-                    JOptionPane.showMessageDialog(this,
-                        String.format("Quiz Results:\n\n" +
-                            "Correct Answers: %d / %d\n" +
-                            "Points Earned: %d / %d\n" +
-                            "Percentage: %.1f%%\n" +
-                            "Grade: %s",
-                            myResult.getCorrectAnswers(), myResult.getTotalQuestions(),
-                            myResult.getEarnedPoints(), myResult.getTotalPoints(),
-                            myResult.getPercentage(), myResult.getGrade()),
-                        "Your Quiz Results", JOptionPane.INFORMATION_MESSAGE);
-                }
-                break;
-                    
+                
             case USER_JOIN:
                 // Track username for this connection
                 String username = message.getSender();
                 String peerAddr = connection.getPeerAddress();
                 connectionUsernames.put(connection, username);
                 peerUsernames.put(peerAddr, username);
-                
-                // Register with file transfer manager
-                fileTransferManager.registerPeerConnection(username, connection);
-                updateFileSharingPeerList();
                 
                 // Update peer list with username
                 boolean found = false;
@@ -1221,15 +1225,151 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 // Update peer selector with username
                 updatePeerSelector(connection);
                 break;
-                    
+                
             case USER_LEAVE:
-                appendToChat("[SYSTEM] " + message.getContent());
-                // Update peer selector
-                updatePeerSelector(connection);
-                break;
+                String leavingUser = connectionUsernames.get(connection);
+                if (leavingUser != null) {
+                    appendToChat("[SYSTEM] " + leavingUser + " has left");
+                    connectionUsernames.remove(connection);
                     
+                    // Remove from peer list
+                    for (int i = 0; i < peerListModel.size(); i++) {
+                        if (peerListModel.get(i).contains(leavingUser)) {
+                            peerListModel.remove(i);
+                            break;
+                        }
+                    }
+                }
+                break;
+                
+            case PEER_LIST:
+                // Received list of connected peers from server - update file target selector
+                String[] peers = message.getContent().split(",");
+                
+                SwingUtilities.invokeLater(() -> {
+                    fileTargetSelector.removeAllItems();
+                    fileTargetSelector.addItem("Select recipient...");
+                    
+                    for (String peer : peers) {
+                        if (!peer.trim().isEmpty() && 
+                            !peer.trim().equals(currentUser.getUsername())) {
+                            fileTargetSelector.addItem(peer.trim());
+                        }
+                    }
+                    
+                    System.out.println("[DEBUG] Updated file recipient list: " + Arrays.toString(peers));
+                });
+                break;
+                
+            case QUIZ_START:
+                // New quiz started
+                Quiz quiz = message.getQuizData();
+                if (quiz != null && quizParticipationPanel != null) {
+                    activeQuiz = quiz;
+                    quizParticipationPanel.startQuiz(quiz);
+                    // Don't show quiz messages in group chat
+                    
+                    // Automatically switch to quiz tab (non-admin only) - no popup
+                    boolean isAdminUser = currentUser.getUsername().equalsIgnoreCase("admin") && 
+                                      currentUser.getPassword().equals("admin");
+                    if (!isAdminUser) {
+                        // For non-admin users, "Take Quiz" tab is at index 3
+                        tabbedPane.setSelectedIndex(3);
+                    }
+                }
+                break;
+                
+            case QUIZ_ANSWER:
+                // Quiz answer received (admin side)
+                QuizAnswer answer = message.getQuizAnswer();
+                if (answer != null && activeQuiz != null) {
+                    // Calculate the score based on correct answers
+                    int correctCount = 0;
+                    int totalPoints = 0;
+                    int earnedPoints = 0;
+                    
+                    List<QuizQuestion> questions = activeQuiz.getQuestions();
+                    for (int i = 0; i < questions.size(); i++) {
+                        QuizQuestion question = questions.get(i);
+                        Integer userAnswer = answer.getAnswers().get(i);
+                        
+                        totalPoints += question.getPoints();
+                        
+                        if (userAnswer != null && userAnswer == question.getCorrectAnswer()) {
+                            correctCount++;
+                            earnedPoints += question.getPoints();
+                        }
+                    }
+                    
+                    // Create quiz result
+                    QuizResult result = new QuizResult(
+                        activeQuiz.getId(),
+                        message.getSender(),
+                        questions.size(),
+                        correctCount,
+                        totalPoints,
+                        earnedPoints
+                    );
+                    
+                    quizResults.put(message.getSender(), result);
+                    updateLeaderboard();
+                    
+                    // Automatically broadcast updated leaderboard to all students in real-time
+                    String leaderboardText = leaderboardArea.getText();
+                    Message leaderboardMsg = new Message(
+                        currentUser.getUsername(),
+                        "all",
+                        leaderboardText,
+                        Message.MessageType.BROADCAST
+                    );
+                    
+                    // Send to all connected peers
+                    for (Client client : connectedPeers) {
+                        client.sendMessage(leaderboardMsg);
+                    }
+                    
+                    if (server != null && server.isRunning()) {
+                        server.broadcast(leaderboardMsg);
+                    }
+                    
+                    // Don't show quiz completion messages in group chat
+                    
+                    // Send result back to the client
+                    Message resultMsg = new Message("Server", message.getSender(),
+                        "Quiz completed", Message.MessageType.QUIZ_RESULT);
+                    resultMsg.setQuizResult(result);
+                    connection.sendMessage(resultMsg);
+                }
+                break;
+                
+            case QUIZ_RESULT:
+                // Quiz result received
+                QuizResult myResult = message.getQuizResult();
+                if (myResult != null) {
+                    // Store the result in the local quizResults map
+                    quizResults.put(currentUser.getUsername(), myResult);
+                    
+                    // Update the leaderboard to show the result (if admin)
+                    boolean isAdminUser = currentUser.getUsername().equalsIgnoreCase("admin") && 
+                                      currentUser.getPassword().equals("admin");
+                    if (isAdminUser) {
+                        updateLeaderboard();
+                    }
+                    
+                    // For non-admin users, automatically switch to leaderboard tab
+                    // The leaderboard will be updated in real-time via broadcast
+                    if (!isAdminUser) {
+                        // For non-admin users, "Leaderboard" tab is at index 4
+                        SwingUtilities.invokeLater(() -> {
+                            tabbedPane.setSelectedIndex(4);
+                        });
+                    }
+                    
+                    // Don't show quiz messages in group chat
+                }
+                break;
+                
             default:
-                appendToChat(message.getSender() + ": " + message.getContent());
                 break;
         }
     }
@@ -1237,9 +1377,6 @@ public class MainDashboard extends JFrame implements MessageHandler {
     @Override
     public void onFileReceived(FileTransfer fileTransfer, PeerConnection connection) {
         SwingUtilities.invokeLater(() -> {
-            // Update File Sharing Panel with received file
-            fileSharingPanel.addReceivedFile(fileTransfer);
-            
             int result = JOptionPane.showConfirmDialog(this,
                 "Receive file: " + fileTransfer.getFileName() + 
                 " (" + fileTransfer.getFileSizeFormatted() + ") from " + 
@@ -1271,5 +1408,21 @@ public class MainDashboard extends JFrame implements MessageHandler {
             statusLabel.setText("Status: " + status);
             appendToChat("System: " + status);
         });
+    }
+    
+    /**
+     * Get public IP address from external service
+     */
+    private String getPublicIP() {
+        try {
+            java.net.URL url = new java.net.URL("https://api.ipify.org");
+            java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(url.openStream()));
+            String ip = reader.readLine();
+            reader.close();
+            return ip;
+        } catch (Exception e) {
+            return "Unavailable";
+        }
     }
 }

@@ -35,15 +35,13 @@ public class Server {
      */
     public void start() {
         if (running) {
-            messageHandler.onServerStatus("Server is already running on port " + port);
             return;
         }
 
         threadPool.execute(() -> {
             try {
-                // Try to bind to the port
                 serverSocket = new ServerSocket(port);
-                messageHandler.onServerStatus("✅ Server started successfully on port " + port);
+                messageHandler.onServerStatus("Server started on port " + port);
 
                 running = true;
 
@@ -80,25 +78,8 @@ public class Server {
                         }
                     }
                 }
-            } catch (BindException e) {
-                // Port is already in use
-                String errorMsg = String.format(
-                    "❌ Port %d is already in use!\n\n" +
-                    "Solutions:\n" +
-                    "1. Close any other instance of StudyConnect\n" +
-                    "2. Check Task Manager for 'java.exe' and end it\n" +
-                    "3. Wait 30 seconds and try again\n" +
-                    "4. Restart your computer if problem persists",
-                    port
-                );
-                messageHandler.onServerStatus(errorMsg);
-                System.err.println("[SERVER] Port " + port + " is already in use");
             } catch (IOException e) {
-                String errorMsg = "Server error: " + e.getMessage();
-                messageHandler.onServerStatus(errorMsg);
-                System.err.println("[SERVER] " + errorMsg);
-            } finally {
-                running = false;
+                messageHandler.onServerStatus("Server error: " + e.getMessage());
             }
         });
     }
