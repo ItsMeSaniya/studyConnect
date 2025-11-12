@@ -70,18 +70,10 @@ public class MainDashboard extends JFrame implements MessageHandler {
         this.peerListModel = new DefaultListModel<>();
         this.quizResults = new HashMap<>();
         
-        // Start UDP listener for notifications
+        // Start UDP listener for notifications - but don't show popups
         notificationClient = new NotificationClient(msg -> {
-            SwingUtilities.invokeLater(() -> {
-                try {
-                    System.out.println("[DEBUG] " + currentUser.getUsername() + " showing notification: " + msg);
-                    NotificationPopup popup = new NotificationPopup(this, msg);
-                    popup.showPopup(3000); // Show for 3 seconds
-                } catch (Exception e) {
-                    System.err.println("[ERROR] Failed to show notification: " + e.getMessage());
-                    e.printStackTrace();
-                }
-            });
+            // Popup notifications disabled - just log to console
+            System.out.println("[NOTIFICATION] " + msg);
         }, currentUser.getUsername());
 
         notificationClient.start();
@@ -227,9 +219,16 @@ public class MainDashboard extends JFrame implements MessageHandler {
             JPanel ipPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
             ipPanel.setOpaque(false);
             ipPanel.add(new JLabel("Server IP:"));
-            JTextField serverIpField = new JTextField("127.0.0.1", 12);
+            JTextField serverIpField = new JTextField("", 12);
+            serverIpField.setToolTipText("Enter the admin's IP address (e.g., 192.168.1.3)");
             ipPanel.add(serverIpField);
             ipPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            
+            // Help label
+            JLabel helpLabel = new JLabel("<html><i> Ask admin for their IP address<br/>(NOT 127.0.0.1 unless on same PC)</i></html>");
+            helpLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            helpLabel.setForeground(new Color(100, 100, 100));
+            helpLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
             
             // Port input
             JPanel portPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -270,6 +269,8 @@ public class MainDashboard extends JFrame implements MessageHandler {
             });
             
             connectPanel.add(ipPanel);
+            connectPanel.add(Box.createVerticalStrut(3));
+            connectPanel.add(helpLabel);
             connectPanel.add(Box.createVerticalStrut(5));
             connectPanel.add(portPanel);
             connectPanel.add(Box.createVerticalStrut(10));
@@ -311,25 +312,25 @@ public class MainDashboard extends JFrame implements MessageHandler {
         tabbedPane = new JTabbedPane();
         tabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         
-        // Tab 1: Group Chat
-        tabbedPane.addTab("💬 Group Chat", createGroupChatTab());
+        // Tab 1: Study Group Chat
+        tabbedPane.addTab("Study Chat", createGroupChatTab());
+
+        // Tab 2: Resource Sharing
+        tabbedPane.addTab("Resources", createFileSharingTab());
         
-        // Tab 2: File Sharing
-        tabbedPane.addTab("� File Sharing", createFileSharingTab());
-        
-        // Tab 3: Broadcast
-        tabbedPane.addTab("📢 Broadcast", createBroadcastTab());
+        // Tab 3: Announcements
+        tabbedPane.addTab("Announcements", createBroadcastTab());
         
         // Tab 4: Create Quiz (admin only)
         if (isAdmin) {
-            tabbedPane.addTab("📊 Create Quiz", createQuizCreatorTab());
-            // Tab 5: Leaderboard (admin can see results)
-            tabbedPane.addTab("🏆 Leaderboard", createLeaderboardTab());
+            tabbedPane.addTab("Create Quiz", createQuizCreatorTab());
+            // Tab 5: Results Dashboard (admin can see all results)
+            tabbedPane.addTab("Results", createLeaderboardTab());
         } else {
             // Tab 4: Quiz Participation (non-admin only)
-            tabbedPane.addTab("✏️ Take Quiz", createQuizParticipationTab());
-            // Tab 5: Leaderboard (students can see when shared)
-            tabbedPane.addTab("🏆 Leaderboard", createStudentLeaderboardTab());
+            tabbedPane.addTab("Take Quiz", createQuizParticipationTab());
+            // Tab 5: My Results (students can see when shared)
+            tabbedPane.addTab("My Results", createStudentLeaderboardTab());
         }
         
         panel.add(tabbedPane, BorderLayout.CENTER);
@@ -343,12 +344,12 @@ public class MainDashboard extends JFrame implements MessageHandler {
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         
         // Title
-        JLabel titleLabel = new JLabel("Group Chat");
+        JLabel titleLabel = new JLabel("Study Group Chat");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
         // Info label
-        JLabel infoLabel = new JLabel("💬 Chat with all connected peers");
+        JLabel infoLabel = new JLabel("Chat with your study group members");
         infoLabel.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         infoLabel.setForeground(new Color(100, 100, 100));
         infoLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
@@ -400,12 +401,12 @@ public class MainDashboard extends JFrame implements MessageHandler {
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         
         // Title
-        JLabel titleLabel = new JLabel("File Sharing");
+        JLabel titleLabel = new JLabel("📚 Study Resources");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
         // Info label
-        JLabel infoLabel = new JLabel("📁 Share files with connected peers");
+        JLabel infoLabel = new JLabel("Share study materials, notes, and documents");
         infoLabel.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         infoLabel.setForeground(new Color(100, 100, 100));
         infoLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
@@ -416,7 +417,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
         fileHistoryArea.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         fileHistoryArea.setLineWrap(true);
         fileHistoryArea.setWrapStyleWord(true);
-        fileHistoryArea.setText("File transfer history will appear here...\n");
+        fileHistoryArea.setText("Resource sharing history will appear here...\n");
         JScrollPane historyScrollPane = new JScrollPane(fileHistoryArea);
         historyScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
         
@@ -469,13 +470,20 @@ public class MainDashboard extends JFrame implements MessageHandler {
         panel.setBackground(Color.WHITE);
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         
+        // Check if current user is admin
+        boolean isAdmin = currentUser.getUsername().equalsIgnoreCase("admin") && 
+                         currentUser.getPassword().equals("admin");
+        
         // Title
-        JLabel titleLabel = new JLabel("Broadcast Messages");
+        JLabel titleLabel = new JLabel("📢 Announcements");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
-        // Info label
-        JLabel infoLabel = new JLabel("📢 Send messages to all connected peers simultaneously");
+        // Info label - different for admin vs students
+        String infoText = isAdmin ? 
+            "Post important announcements to all students" :
+            "View announcements from your instructor";
+        JLabel infoLabel = new JLabel(infoText);
         infoLabel.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         infoLabel.setForeground(new Color(100, 100, 100));
         infoLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
@@ -488,26 +496,6 @@ public class MainDashboard extends JFrame implements MessageHandler {
         broadcastArea.setWrapStyleWord(true);
         JScrollPane scrollPane = new JScrollPane(broadcastArea);
         
-        // Broadcast input panel
-        JPanel inputPanel = new JPanel(new BorderLayout(10, 0));
-        inputPanel.setBackground(Color.WHITE);
-        inputPanel.setBorder(new EmptyBorder(10, 0, 0, 0));
-        
-        broadcastField = new JTextField();
-        broadcastField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        broadcastField.addActionListener(e -> sendBroadcast());
-        
-        broadcastButton = new JButton("📢 Broadcast to All");
-        broadcastButton.setBackground(new Color(251, 188, 5));
-        broadcastButton.setForeground(Color.WHITE);
-        broadcastButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        broadcastButton.setFocusPainted(false);
-        broadcastButton.setPreferredSize(new Dimension(160, 35));
-        broadcastButton.addActionListener(e -> sendBroadcast());
-        
-        inputPanel.add(broadcastField, BorderLayout.CENTER);
-        inputPanel.add(broadcastButton, BorderLayout.EAST);
-        
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setOpaque(false);
         topPanel.add(titleLabel, BorderLayout.NORTH);
@@ -515,7 +503,30 @@ public class MainDashboard extends JFrame implements MessageHandler {
         
         panel.add(topPanel, BorderLayout.NORTH);
         panel.add(scrollPane, BorderLayout.CENTER);
-        panel.add(inputPanel, BorderLayout.SOUTH);
+        
+        // Only add broadcast input panel for admin users
+        if (isAdmin) {
+            JPanel inputPanel = new JPanel(new BorderLayout(10, 0));
+            inputPanel.setBackground(Color.WHITE);
+            inputPanel.setBorder(new EmptyBorder(10, 0, 0, 0));
+            
+            broadcastField = new JTextField();
+            broadcastField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            broadcastField.addActionListener(e -> sendBroadcast());
+            
+            broadcastButton = new JButton("📢 Broadcast to All");
+            broadcastButton.setBackground(new Color(251, 188, 5));
+            broadcastButton.setForeground(Color.WHITE);
+            broadcastButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            broadcastButton.setFocusPainted(false);
+            broadcastButton.setPreferredSize(new Dimension(160, 35));
+            broadcastButton.addActionListener(e -> sendBroadcast());
+            
+            inputPanel.add(broadcastField, BorderLayout.CENTER);
+            inputPanel.add(broadcastButton, BorderLayout.EAST);
+            
+            panel.add(inputPanel, BorderLayout.SOUTH);
+        }
         
         return panel;
     }
@@ -578,7 +589,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         
         // Title
-        JLabel titleLabel = new JLabel("🏆 Quiz Leaderboard");
+        JLabel titleLabel = new JLabel("🏆 Quiz Results & Rankings");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
@@ -622,12 +633,12 @@ public class MainDashboard extends JFrame implements MessageHandler {
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         
         // Title
-        JLabel titleLabel = new JLabel("🏆 Quiz Leaderboard");
+        JLabel titleLabel = new JLabel("🏆 My Quiz Results");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
         // Info label
-        JLabel infoLabel = new JLabel("📊 Waiting for admin to share quiz results...");
+        JLabel infoLabel = new JLabel("📊 View your quiz performance and rankings");
         infoLabel.setFont(new Font("Segoe UI", Font.ITALIC, 13));
         infoLabel.setForeground(new Color(100, 100, 100));
         infoLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
@@ -722,9 +733,9 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 connectedPeers.add(client);
                 peerListModel.addElement(ip + ":" + port);
                 
-                // Send greeting message
+                // Send USER_JOIN message to let server know our username
                 Message greeting = new Message(currentUser.getUsername(), "all",
-                    currentUser.getUsername() + " has joined the chat",
+                    currentUser.getUsername() + " has joined",
                     Message.MessageType.USER_JOIN);
                 client.sendMessage(greeting);
                 
@@ -805,16 +816,17 @@ public class MainDashboard extends JFrame implements MessageHandler {
         
         Message message = new Message(currentUser.getUsername(), "all", text, Message.MessageType.BROADCAST);
         
-        // Send to all connected peers
+        // Send to all connected peers (clients)
         for (Client client : connectedPeers) {
             client.sendMessage(message);
         }
         
+        // If we're running a server, broadcast to all server clients
         if (server != null && server.isRunning()) {
             server.broadcast(message);
         }
         
-        // Display in broadcast area
+        // Display locally only once (we won't see it come back because of sender filter)
         appendToBroadcast("[BROADCAST] You: " + text);
         broadcastField.setText("");
     }
@@ -1130,22 +1142,24 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 if (!message.getSender().equals(currentUser.getUsername())) {
                     String content = message.getContent();
                     
-                    System.out.println("[DEBUG] Received BROADCAST message");
-                    System.out.println("[DEBUG] Content contains leaderboard: " + content.contains("🏆 QUIZ LEADERBOARD 🏆"));
-                    System.out.println("[DEBUG] studentLeaderboardArea is null: " + (studentLeaderboardArea == null));
+                    System.out.println("[DEBUG BROADCAST] Received from: " + message.getSender());
+                    System.out.println("[DEBUG BROADCAST] Content contains leaderboard: " + content.contains("🏆 QUIZ LEADERBOARD 🏆"));
+                    System.out.println("[DEBUG BROADCAST] studentLeaderboardArea null?: " + (studentLeaderboardArea == null));
                     
                     // Check if this is a shared leaderboard (starts with specific markers)
-                    if (content.contains("🏆 QUIZ LEADERBOARD 🏆") && studentLeaderboardArea != null) {
-                        System.out.println("[DEBUG] Updating student leaderboard!");
+                    if (content.contains("QUIZ LEADERBOARD") && studentLeaderboardArea != null) {
+                        System.out.println("[DEBUG BROADCAST] Updating student leaderboard!");
                         // Update student leaderboard tab and switch to it
                         SwingUtilities.invokeLater(() -> {
                             studentLeaderboardArea.setText(content);
-                            // Auto-switch to leaderboard tab (index 3 for students: Chat, File, Broadcast, Leaderboard)
-                            tabbedPane.setSelectedIndex(3);
+                            // Auto-switch to leaderboard tab (index 4 for students: Chat, File, Broadcast, Take Quiz, Leaderboard)
+                            tabbedPane.setSelectedIndex(4);
+                            System.out.println("[DEBUG BROADCAST] Leaderboard tab updated and switched!");
                         });
                     } else {
+                        System.out.println("[DEBUG BROADCAST] Showing in broadcast tab only");
+                        // Only show in broadcast tab, not in chat
                         appendToBroadcast("[BROADCAST] " + message.getSender() + ": " + content);
-                        appendToChat("[BROADCAST] " + message.getSender() + ": " + content);
                     }
                 }
                 break;
@@ -1253,7 +1267,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 if (quiz != null && quizParticipationPanel != null) {
                     activeQuiz = quiz;
                     quizParticipationPanel.startQuiz(quiz);
-                    appendToChat("[QUIZ] New quiz available: " + quiz.getTitle());
+                    // Don't show quiz messages in group chat
                     
                     // Automatically switch to quiz tab (non-admin only) - no popup
                     boolean isAdminUser = currentUser.getUsername().equalsIgnoreCase("admin") && 
@@ -1299,8 +1313,26 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     
                     quizResults.put(message.getSender(), result);
                     updateLeaderboard();
-                    appendToChat("[QUIZ] " + message.getSender() + " completed the quiz. Score: " + 
-                        result.getEarnedPoints() + "/" + result.getTotalPoints());
+                    
+                    // Automatically broadcast updated leaderboard to all students in real-time
+                    String leaderboardText = leaderboardArea.getText();
+                    Message leaderboardMsg = new Message(
+                        currentUser.getUsername(),
+                        "all",
+                        leaderboardText,
+                        Message.MessageType.BROADCAST
+                    );
+                    
+                    // Send to all connected peers
+                    for (Client client : connectedPeers) {
+                        client.sendMessage(leaderboardMsg);
+                    }
+                    
+                    if (server != null && server.isRunning()) {
+                        server.broadcast(leaderboardMsg);
+                    }
+                    
+                    // Don't show quiz completion messages in group chat
                     
                     // Send result back to the client
                     Message resultMsg = new Message("Server", message.getSender(),
@@ -1317,28 +1349,23 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     // Store the result in the local quizResults map
                     quizResults.put(currentUser.getUsername(), myResult);
                     
-                    // Update the leaderboard to show the result
-                    updateLeaderboard();
-                    
-                    // Switch to leaderboard tab to show results
+                    // Update the leaderboard to show the result (if admin)
                     boolean isAdminUser = currentUser.getUsername().equalsIgnoreCase("admin") && 
                                       currentUser.getPassword().equals("admin");
-                    if (!isAdminUser) {
-                        // For non-admin users, "Leaderboard" tab is at index 4
-                        tabbedPane.setSelectedIndex(4);
+                    if (isAdminUser) {
+                        updateLeaderboard();
                     }
                     
-                    // Show result dialog
-                    JOptionPane.showMessageDialog(this,
-                        String.format("Quiz Results:\n\n" +
-                            "Correct Answers: %d / %d\n" +
-                            "Points Earned: %d / %d\n" +
-                            "Percentage: %.1f%%\n" +
-                            "Grade: %s",
-                            myResult.getCorrectAnswers(), myResult.getTotalQuestions(),
-                            myResult.getEarnedPoints(), myResult.getTotalPoints(),
-                            myResult.getPercentage(), myResult.getGrade()),
-                        "Your Quiz Results", JOptionPane.INFORMATION_MESSAGE);
+                    // For non-admin users, automatically switch to leaderboard tab
+                    // The leaderboard will be updated in real-time via broadcast
+                    if (!isAdminUser) {
+                        // For non-admin users, "Leaderboard" tab is at index 4
+                        SwingUtilities.invokeLater(() -> {
+                            tabbedPane.setSelectedIndex(4);
+                        });
+                    }
+                    
+                    // Don't show quiz messages in group chat
                 }
                 break;
                 

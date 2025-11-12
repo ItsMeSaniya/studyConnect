@@ -45,17 +45,7 @@ public class PeerConnection implements Runnable {
                 if (obj instanceof Message) {
                     Message message = (Message) obj;
                     messageHandler.onMessageReceived(message, this);
-
-                    // FIX: Only notify if this message is directly addressed to current user
-                    // or if it's a broadcast AND we're not the sender
-                    boolean isForCurrentUser = message.getRecipient().equals(currentUsername) ||
-                            message.getRecipient().equals("ALL");
-                    boolean isFromOtherUser = !message.getSender().equals(currentUsername);
-
-                    if (isForCurrentUser && isFromOtherUser) {
-                        NotificationServer.notify(
-                                "Message from " + message.getSender() + ": " + message.getContent());
-                    }
+                    // Popup notifications removed
 
                 } else if (obj instanceof FileTransfer) {
                     FileTransfer fileTransfer = (FileTransfer) obj;
@@ -66,9 +56,7 @@ public class PeerConnection implements Runnable {
 
                     if (isIncomingFile && isForCurrentUser) {
                         messageHandler.onFileReceived(fileTransfer, this);
-                        NotificationServer.notify(
-                                "File Received: " + fileTransfer.getFileName() +
-                                        " from " + fileTransfer.getSender());
+                        // Popup notification removed
                     } else {
                         // This is our own file transfer echo, just log it
                         System.out.println("[DEBUG] Ignoring file transfer: " + fileTransfer.getFileName() +
@@ -88,7 +76,7 @@ public class PeerConnection implements Runnable {
 
         close();
         messageHandler.onServerStatus("Peer disconnected: " + peerAddress);
-        NotificationServer.notify("Peer disconnected: " + peerAddress);
+        // Popup notification removed
     }
 
     /**
@@ -116,11 +104,7 @@ public class PeerConnection implements Runnable {
                 out.flush();
                 out.reset();
                 messageHandler.onServerStatus("File sent: " + fileTransfer.getFileName());
-
-                // Notification when file is sent also
-                NotificationServer.notify(
-                        "📤 File Sent: " + fileTransfer.getFileName() +
-                                " to " + fileTransfer.getRecipient());
+                // Popup notification removed
             }
         } catch (IOException e) {
             messageHandler.onServerStatus("Error sending file: " + e.getMessage());

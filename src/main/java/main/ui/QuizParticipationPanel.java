@@ -61,10 +61,21 @@ public class QuizParticipationPanel extends JPanel {
     
     public void startQuiz(Quiz quiz) {
         this.quiz = quiz;
+        
+        // Stop any existing timer
+        if (timer != null && timer.isRunning()) {
+            timer.stop();
+        }
+        
+        // Clear and reset everything
         removeAll();
         answerGroups.clear();
+        
+        // Reinitialize with new quiz
         initComponents(username != null ? username : "Guest");
         startTimer();
+        
+        // Refresh the display
         revalidate();
         repaint();
     }
@@ -193,9 +204,50 @@ public class QuizParticipationPanel extends JPanel {
             listener.onQuizSubmitted(answer);
         }
         
-        JOptionPane.showMessageDialog(this, 
-            "Quiz submitted! Waiting for results...", 
-            "Submitted", JOptionPane.INFORMATION_MESSAGE);
+        // Hide quiz and show completion message
+        removeAll();
+        setLayout(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.insets = new Insets(10, 10, 10, 10);
+        
+        JPanel completionPanel = new JPanel();
+        completionPanel.setLayout(new BoxLayout(completionPanel, BoxLayout.Y_AXIS));
+        completionPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        JLabel successIcon = new JLabel("✅");
+        successIcon.setFont(new Font("Segoe UI", Font.PLAIN, 72));
+        successIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
+        completionPanel.add(successIcon);
+        
+        completionPanel.add(Box.createVerticalStrut(20));
+        
+        JLabel submittedLabel = new JLabel("Quiz Submitted Successfully!");
+        submittedLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        submittedLabel.setForeground(new Color(76, 175, 80));
+        submittedLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        completionPanel.add(submittedLabel);
+        
+        completionPanel.add(Box.createVerticalStrut(10));
+        
+        JLabel messageLabel = new JLabel("Your answers have been recorded.");
+        messageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        messageLabel.setForeground(new Color(100, 100, 100));
+        messageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        completionPanel.add(messageLabel);
+        
+        completionPanel.add(Box.createVerticalStrut(5));
+        
+        JLabel resultsLabel = new JLabel("Check the Leaderboard tab for results!");
+        resultsLabel.setFont(new Font("Segoe UI", Font.ITALIC, 14));
+        resultsLabel.setForeground(new Color(100, 100, 100));
+        resultsLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        completionPanel.add(resultsLabel);
+        
+        add(completionPanel, gbc);
+        revalidate();
+        repaint();
     }
     
     public void setQuizSubmittedListener(QuizSubmittedListener listener) {

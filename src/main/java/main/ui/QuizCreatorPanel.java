@@ -216,11 +216,15 @@ public class QuizCreatorPanel extends JPanel {
             listener.onQuizCreated(quiz);
         }
         
-        // Reset form
+        // Reset form for next quiz
         titleField.setText("");
+        titleField.setEnabled(true);
         questions.clear();
         questionsModel.clear();
         durationSpinner.setValue(5);
+        durationSpinner.setEnabled(true);
+        addQuestionButton.setEnabled(true);
+        createQuizButton.setEnabled(true);
         
         JOptionPane.showMessageDialog(this, 
             "Quiz created and started!\nSent to all connected peers.", 
