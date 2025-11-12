@@ -344,7 +344,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
             // Tab 4: Quiz Participation (non-admin only)
             tabbedPane.addTab("Take Quiz", createQuizParticipationTab());
             // Tab 5: My Results (students can see when shared)
-            tabbedPane.addTab("My Results", createStudentLeaderboardTab());
+            tabbedPane.addTab("Results", createStudentLeaderboardTab());
         }
         
         panel.add(tabbedPane, BorderLayout.CENTER);
@@ -484,7 +484,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         
         // Title
-        JLabel titleLabel = new JLabel("📚 Study Resources");
+        JLabel titleLabel = new JLabel("Study Resources");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
@@ -524,7 +524,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
         fileTargetSelector.setPreferredSize(new Dimension(250, 30));
         fileTargetSelector.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         
-        JButton sendFileButton = new JButton("📎 Choose & Send File");
+        JButton sendFileButton = new JButton("Choose & Send File");
         sendFileButton.setBackground(new Color(52, 168, 83));
         sendFileButton.setForeground(Color.WHITE);
         sendFileButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
@@ -558,7 +558,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
                          currentUser.getPassword().equals("admin");
         
         // Title
-        JLabel titleLabel = new JLabel("📢 Announcements");
+        JLabel titleLabel = new JLabel("Announcements");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
@@ -597,7 +597,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
             broadcastField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
             broadcastField.addActionListener(e -> sendBroadcast());
             
-            broadcastButton = new JButton("📢 Broadcast to All");
+            broadcastButton = new JButton("Broadcast to All");
             broadcastButton.setBackground(new Color(251, 188, 5));
             broadcastButton.setForeground(Color.WHITE);
             broadcastButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
@@ -671,7 +671,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         
         // Title
-        JLabel titleLabel = new JLabel("🏆 Quiz Results & Rankings");
+        JLabel titleLabel = new JLabel("Quiz Results & Rankings");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
@@ -687,7 +687,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
         buttonPanel.setOpaque(false);
         
         // Refresh button
-        JButton refreshButton = new JButton("🔄 Refresh");
+        JButton refreshButton = new JButton("Refresh");
         refreshButton.setBackground(new Color(66, 133, 244));
         refreshButton.setForeground(Color.WHITE);
         refreshButton.setFocusPainted(false);
@@ -695,7 +695,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
         buttonPanel.add(refreshButton);
         
         // Share Leaderboard button (admin only)
-        JButton shareButton = new JButton("📤 Share with Students");
+        JButton shareButton = new JButton("Share with Students");
         shareButton.setBackground(new Color(52, 168, 83));
         shareButton.setForeground(Color.WHITE);
         shareButton.setFocusPainted(false);
@@ -715,12 +715,12 @@ public class MainDashboard extends JFrame implements MessageHandler {
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         
         // Title
-        JLabel titleLabel = new JLabel("🏆 My Quiz Results");
+        JLabel titleLabel = new JLabel("Quiz Results");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
         // Info label
-        JLabel infoLabel = new JLabel("📊 View your quiz performance and rankings");
+        JLabel infoLabel = new JLabel("View quiz performance and rankings");
         infoLabel.setFont(new Font("Segoe UI", Font.ITALIC, 13));
         infoLabel.setForeground(new Color(100, 100, 100));
         infoLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
@@ -841,7 +841,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     }
                 });
                 
-                appendToChat("[SYSTEM] ✅ Connected to " + ip + ":" + port);
+                appendToChat("[SYSTEM] Connected to " + ip + ":" + port);
             }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
@@ -995,11 +995,11 @@ public class MainDashboard extends JFrame implements MessageHandler {
         sortedResults.sort((a, b) -> Integer.compare(b.getValue().getEarnedPoints(), a.getValue().getEarnedPoints()));
         
         StringBuilder sb = new StringBuilder();
-        sb.append("═══════════════════════════════════════════════════════\n");
-        sb.append("                    🏆 QUIZ LEADERBOARD 🏆\n");
-        sb.append("═══════════════════════════════════════════════════════\n\n");
+        sb.append("=======================================================\n");
+        sb.append("                    === QUIZ LEADERBOARD ===\n");
+        sb.append("=======================================================\n\n");
         sb.append(String.format("%-5s %-20s %-10s %-10s %-10s\n", "Rank", "Player", "Score", "Percent", "Grade"));
-        sb.append("───────────────────────────────────────────────────────\n");
+        sb.append("-------------------------------------------------------\n");
         
         int rank = 1;
         for (Map.Entry<String, QuizResult> entry : sortedResults) {
@@ -1007,9 +1007,9 @@ public class MainDashboard extends JFrame implements MessageHandler {
             QuizResult result = entry.getValue();
             
             String medal = "";
-            if (rank == 1) medal = "🥇";
-            else if (rank == 2) medal = "🥈";
-            else if (rank == 3) medal = "🥉";
+            if (rank == 1) medal = "[1st]";
+            else if (rank == 2) medal = "[2nd]";
+            else if (rank == 3) medal = "[3rd]";
             
             sb.append(String.format("%-5s %-20s %-10d %-10.1f%% %-10s\n",
                 medal + rank, username, result.getEarnedPoints(), 
@@ -1378,7 +1378,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     String content = message.getContent();
                     
                     System.out.println("[DEBUG BROADCAST] Received from: " + message.getSender());
-                    System.out.println("[DEBUG BROADCAST] Content contains leaderboard: " + content.contains("🏆 QUIZ LEADERBOARD 🏆"));
+                    System.out.println("[DEBUG BROADCAST] Content contains leaderboard: " + content.contains("=== QUIZ LEADERBOARD ==="));
                     System.out.println("[DEBUG BROADCAST] studentLeaderboardArea null?: " + (studentLeaderboardArea == null));
                     
                     // Check if this is a shared leaderboard (starts with specific markers)

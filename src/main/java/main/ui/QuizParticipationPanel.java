@@ -117,7 +117,7 @@ public class QuizParticipationPanel extends JPanel {
         
         // Submit button
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        submitButton = new JButton("✓ Submit Quiz");
+        submitButton = new JButton("Submit Quiz");
         submitButton.setBackground(new Color(33, 150, 243));
         submitButton.setForeground(Color.WHITE);
         submitButton.setFont(submitButton.getFont().deriveFont(Font.BOLD, 14f));
@@ -216,8 +216,9 @@ public class QuizParticipationPanel extends JPanel {
         completionPanel.setLayout(new BoxLayout(completionPanel, BoxLayout.Y_AXIS));
         completionPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
         
-        JLabel successIcon = new JLabel("✅");
-        successIcon.setFont(new Font("Segoe UI", Font.PLAIN, 72));
+        JLabel successIcon = new JLabel("[SUCCESS]");
+        successIcon.setFont(new Font("Segoe UI", Font.BOLD, 36));
+        successIcon.setForeground(new Color(76, 175, 80));
         successIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
         completionPanel.add(successIcon);
         

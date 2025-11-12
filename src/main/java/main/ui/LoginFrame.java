@@ -79,7 +79,7 @@ public class LoginFrame extends JFrame {
         titleLabel.setForeground(Color.WHITE);
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         
-        JLabel subtitleLabel = new JLabel("Peer-to-Peer Study Collaboration");
+        JLabel subtitleLabel = new JLabel("Study Together, Anywhere");
         subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
         subtitleLabel.setForeground(new Color(230, 230, 230));
         subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);

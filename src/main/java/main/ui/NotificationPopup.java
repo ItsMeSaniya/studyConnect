@@ -33,8 +33,9 @@ public class NotificationPopup extends JDialog {
         messagePanel.setOpaque(false);
         
         // Notification icon
-        JLabel iconLabel = new JLabel("🔔");
-        iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 16));
+        JLabel iconLabel = new JLabel("[!]");
+        iconLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        iconLabel.setForeground(Color.WHITE);
         iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
         
         // Message label with HTML for better text wrapping
