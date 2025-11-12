@@ -76,15 +76,15 @@ public class QuizCreatorPanel extends JPanel {
         // Buttons panel
         JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
         
-        addQuestionButton = new JButton("➕ Add Question");
+        addQuestionButton = new JButton("Add Question");
         addQuestionButton.addActionListener(e -> showAddQuestionDialog());
         buttonsPanel.add(addQuestionButton);
         
-        JButton removeQuestionButton = new JButton("➖ Remove");
+        JButton removeQuestionButton = new JButton("Remove");
         removeQuestionButton.addActionListener(e -> removeSelectedQuestion());
         buttonsPanel.add(removeQuestionButton);
         
-        createQuizButton = new JButton("🚀 Create & Start Quiz");
+        createQuizButton = new JButton("Create & Start Quiz");
         createQuizButton.setBackground(new Color(76, 175, 80));
         createQuizButton.setForeground(Color.WHITE);
         createQuizButton.setFont(createQuizButton.getFont().deriveFont(Font.BOLD, 14f));
