@@ -24,7 +24,8 @@ public class Message implements Serializable {
         SERVER_SHUTDOWN,  // Server is shutting down - clients should disconnect
         HEARTBEAT,  // Ping/pong to keep connection alive and detect dead connections
         CLASS_JOIN,  // Student joins the class for screen sharing
-        CLASS_LEAVE  // Student leaves the class
+        CLASS_LEAVE,  // Student leaves the class
+        CLASS_INFO  // Server sends UDP port info to student
     }
     
     private String sender;
@@ -32,6 +33,9 @@ public class Message implements Serializable {
     private String content;
     private MessageType type;
     private LocalDateTime timestamp;
+    
+    // Screen sharing field
+    private int udpPort;  // UDP port for screen sharing
     
     // Quiz-related fields
     private Quiz quizData;
@@ -135,6 +139,14 @@ public class Message implements Serializable {
     
     public void setFileTransfer(FileTransfer fileTransfer) {
         this.fileTransfer = fileTransfer;
+    }
+    
+    public int getUdpPort() {
+        return udpPort;
+    }
+    
+    public void setUdpPort(int udpPort) {
+        this.udpPort = udpPort;
     }
     
     @Override

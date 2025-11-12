@@ -1716,49 +1716,17 @@ public class MainDashboard extends JFrame implements MessageHandler {
             return;
         }
         
-        if (serverPort == 0) {
-            JOptionPane.showMessageDialog(this,
-                "Server port not available. Please reconnect to the server.",
-                "Connection Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        
         try {
-            int udpPort = serverPort + 1000; // Same offset as server
-            
-            UDPReceiver.ScreenFrameListener listener = new UDPReceiver.ScreenFrameListener() {
-                @Override
-                public void onFrameReceived(java.awt.image.BufferedImage image, ScreenFrame frame) {
-                    SwingUtilities.invokeLater(() -> {
-                        ImageIcon icon = new ImageIcon(image);
-                        screenImageLabel.setIcon(icon);
-                        screenImageLabel.setText("");
-                    });
-                }
-                
-                @Override
-                public void onError(String error) {
-                    SwingUtilities.invokeLater(() -> {
-                        receiveStatusLabel.setText("Status: Error - " + error);
-                        receiveStatusLabel.setForeground(Color.RED);
-                    });
-                }
-            };
-            
-            udpReceiver = new UDPReceiver(udpPort, listener);
-            udpReceiver.start();
-            
-            // Send CLASS_JOIN message to server to register for UDP broadcast
+            // Send CLASS_JOIN message to server to request UDP port info
             Message joinMsg = new Message(currentUser.getUsername(), "admin", 
                 "JOIN_CLASS", Message.MessageType.CLASS_JOIN);
             serverClient.sendMessage(joinMsg);
             
             joinClassButton.setEnabled(false);
-            leaveClassButton.setEnabled(true);
-            receiveStatusLabel.setText("Status: Joined Class (UDP port " + udpPort + ")");
-            receiveStatusLabel.setForeground(new Color(33, 150, 243));
+            receiveStatusLabel.setText("Status: Requesting class info...");
+            receiveStatusLabel.setForeground(new Color(255, 165, 0)); // Orange
             
-            System.out.println("[Join Class] Sent CLASS_JOIN message, listening on UDP port " + udpPort);
+            System.out.println("[Join Class] Sent CLASS_JOIN message, waiting for server UDP port...");
             
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -2466,7 +2434,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 break;
                 
             case CLASS_JOIN:
-                // Student wants to join the class - add them to UDP broadcaster
+                // Student wants to join the class - add them to UDP broadcaster and send port info
                 if (udpBroadcaster != null && udpBroadcaster.isBroadcasting()) {
                     String joinPeerAddr = connection.getPeerAddress();
                     // Extract IP (might be in format "IP:Port")
@@ -2476,8 +2444,14 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     udpBroadcaster.addClient(clientIP, udpPort);
                     updateClassStudentsList();
                     
+                    // Send UDP port info back to student
+                    Message classInfo = new Message("server", message.getSender(), 
+                        "CLASS_INFO", Message.MessageType.CLASS_INFO);
+                    classInfo.setUdpPort(udpPort);
+                    connection.sendMessage(classInfo);
+                    
                     System.out.println("[Screen Sharing] Student " + message.getSender() + 
-                        " joined class from " + clientIP + ":" + udpPort);
+                        " joined class from " + clientIP + ", sent UDP port: " + udpPort);
                 }
                 break;
                 
@@ -2494,6 +2468,52 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     
                     System.out.println("[Screen Sharing] Student " + message.getSender() + 
                         " left class from " + clientIP + ":" + udpPort);
+                }
+                break;
+                
+            case CLASS_INFO:
+                // Received UDP port info from server - start UDP receiver on correct port
+                int serverUdpPort = message.getUdpPort();
+                if (serverUdpPort > 0) {
+                    System.out.println("[Join Class] Server instructed to use UDP port: " + serverUdpPort);
+                    
+                    try {
+                        UDPReceiver.ScreenFrameListener listener = new UDPReceiver.ScreenFrameListener() {
+                            @Override
+                            public void onFrameReceived(java.awt.image.BufferedImage image, ScreenFrame frame) {
+                                SwingUtilities.invokeLater(() -> {
+                                    ImageIcon icon = new ImageIcon(image);
+                                    screenImageLabel.setIcon(icon);
+                                    screenImageLabel.setText("");
+                                });
+                            }
+                            
+                            @Override
+                            public void onError(String error) {
+                                SwingUtilities.invokeLater(() -> {
+                                    receiveStatusLabel.setText("Status: Error - " + error);
+                                    receiveStatusLabel.setForeground(Color.RED);
+                                });
+                            }
+                        };
+                        
+                        udpReceiver = new UDPReceiver(serverUdpPort, listener);
+                        udpReceiver.start();
+                        
+                        leaveClassButton.setEnabled(true);
+                        receiveStatusLabel.setText("Status: Joined Class (UDP port " + serverUdpPort + ")");
+                        receiveStatusLabel.setForeground(new Color(33, 150, 243));
+                        
+                        System.out.println("[Join Class] Started UDP receiver on port " + serverUdpPort);
+                        
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                        SwingUtilities.invokeLater(() -> {
+                            receiveStatusLabel.setText("Status: Failed to start receiver");
+                            receiveStatusLabel.setForeground(Color.RED);
+                            joinClassButton.setEnabled(true);
+                        });
+                    }
                 }
                 break;
                 
