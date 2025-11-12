@@ -3,7 +3,6 @@ package main.ui;
 import main.model.*;
 import main.network.Client;
 import main.network.MessageHandler;
-import main.network.NotificationClient;
 import main.network.PeerConnection;
 import main.network.Server;
 import main.util.NetworkUtil;
@@ -25,7 +24,6 @@ public class MainDashboard extends JFrame implements MessageHandler {
     private Map<String, PeerConnection> peerConnections; // Track peer connections
     private Map<String, String> peerUsernames; // Map IP:Port -> Username
     private Map<PeerConnection, String> connectionUsernames; // Map Connection -> Username
-    private NotificationClient notificationClient;
     
     // Group Chat components
     private JTextArea chatArea;
@@ -80,14 +78,6 @@ public class MainDashboard extends JFrame implements MessageHandler {
         this.peerListModel = new DefaultListModel<>();
         this.quizResults = new HashMap<>();
         
-        // Start UDP listener for notifications - but don't show popups
-        notificationClient = new NotificationClient(msg -> {
-            // Popup notifications disabled - just log to console
-            System.out.println("[NOTIFICATION] " + msg);
-        }, currentUser.getUsername());
-
-        notificationClient.start();
-
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setVisible(true);
 

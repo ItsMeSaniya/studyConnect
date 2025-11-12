@@ -16,7 +16,6 @@ public class Client {
     private PeerConnection connection;
     private MessageHandler messageHandler;
     private String currentUsername;
-    private NotificationServer notificationServer;
     private boolean connected;
     
     public Client(String host, int port, MessageHandler messageHandler, String currentUsername) {
