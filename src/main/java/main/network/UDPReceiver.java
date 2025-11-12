@@ -115,4 +115,15 @@ public class UDPReceiver {
     public int getPort() {
         return port;
     }
+    
+    /**
+     * Get the actual local port the socket is bound to
+     * Useful when port was set to 0 (auto-assign)
+     */
+    public int getLocalPort() {
+        if (socket != null && !socket.isClosed()) {
+            return socket.getLocalPort();
+        }
+        return port;
+    }
 }
