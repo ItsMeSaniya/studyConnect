@@ -654,18 +654,17 @@ public class MainDashboard extends JFrame implements MessageHandler {
     
     private JPanel createQuizParticipationTab() {
         quizParticipationPanel = new QuizParticipationPanel(result -> {
-            // When quiz is completed
+            // When quiz is completed (only students should reach here)
             Message resultMsg = new Message(currentUser.getUsername(), "admin",
                 "Quiz completed", Message.MessageType.QUIZ_ANSWER);
             resultMsg.setQuizAnswer(result);
             
+            // Send to server/clients
             for (Client client : connectedPeers) {
                 client.sendMessage(resultMsg);
             }
             
-            if (server != null && server.isRunning()) {
-                server.broadcast(resultMsg);
-            }
+            // Note: Admin should never take quizzes, so server.broadcast should not be called here
         });
         
         // Set the username on the panel
@@ -989,8 +988,20 @@ public class MainDashboard extends JFrame implements MessageHandler {
             return;
         }
         
-        // Sort results by score
-        List<Map.Entry<String, QuizResult>> sortedResults = new ArrayList<>(quizResults.entrySet());
+        // Filter out admin from results and sort by score
+        List<Map.Entry<String, QuizResult>> sortedResults = new ArrayList<>();
+        for (Map.Entry<String, QuizResult> entry : quizResults.entrySet()) {
+            // Exclude admin from leaderboard
+            if (!entry.getKey().equalsIgnoreCase("admin")) {
+                sortedResults.add(entry);
+            }
+        }
+        
+        if (sortedResults.isEmpty()) {
+            leaderboardArea.setText("No quiz results yet.\n\nWait for students to complete the quiz.");
+            return;
+        }
+        
         sortedResults.sort((a, b) -> Integer.compare(b.getValue().getEarnedPoints(), a.getValue().getEarnedPoints()));
         
         StringBuilder sb = new StringBuilder();
@@ -1525,18 +1536,19 @@ public class MainDashboard extends JFrame implements MessageHandler {
             case QUIZ_START:
                 // New quiz started
                 Quiz quiz = message.getQuizData();
-                if (quiz != null && quizParticipationPanel != null) {
+                
+                // Check if user is admin - admins should not take quizzes
+                boolean isAdminUser = currentUser.getUsername().equalsIgnoreCase("admin") && 
+                                      currentUser.getPassword().equals("admin");
+                
+                if (quiz != null && quizParticipationPanel != null && !isAdminUser) {
                     activeQuiz = quiz;
                     quizParticipationPanel.startQuiz(quiz);
                     // Don't show quiz messages in group chat
                     
-                    // Automatically switch to quiz tab (non-admin only) - no popup
-                    boolean isAdminUser = currentUser.getUsername().equalsIgnoreCase("admin") && 
-                                      currentUser.getPassword().equals("admin");
-                    if (!isAdminUser) {
-                        // For non-admin users, "Take Quiz" tab is at index 3
-                        tabbedPane.setSelectedIndex(3);
-                    }
+                    // Automatically switch to quiz tab for students
+                    // "Take Quiz" tab is at index 4 (after Study Chat, P2P Chat, Resources, Announcements)
+                    tabbedPane.setSelectedIndex(4);
                 }
                 break;
                 
@@ -1609,22 +1621,19 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 // Quiz result received
                 QuizResult myResult = message.getQuizResult();
                 if (myResult != null) {
-                    // Store the result in the local quizResults map
+                    // Store the result in the local quizResults map (but admin results won't be shown in leaderboard)
                     quizResults.put(currentUser.getUsername(), myResult);
                     
                     // Update the leaderboard to show the result (if admin)
-                    boolean isAdminUser = currentUser.getUsername().equalsIgnoreCase("admin") && 
-                                      currentUser.getPassword().equals("admin");
-                    if (isAdminUser) {
+                    if (currentUser.getUsername().equalsIgnoreCase("admin") && 
+                        currentUser.getPassword().equals("admin")) {
                         updateLeaderboard();
-                    }
-                    
-                    // For non-admin users, automatically switch to leaderboard tab
-                    // The leaderboard will be updated in real-time via broadcast
-                    if (!isAdminUser) {
-                        // For non-admin users, "Leaderboard" tab is at index 4
+                    } else {
+                        // For non-admin users, automatically switch to leaderboard tab
+                        // The leaderboard will be updated in real-time via broadcast
+                        // "My Results" tab is at index 5 (after Study Chat, P2P Chat, Resources, Announcements, Take Quiz)
                         SwingUtilities.invokeLater(() -> {
-                            tabbedPane.setSelectedIndex(4);
+                            tabbedPane.setSelectedIndex(5);
                         });
                     }
                     
