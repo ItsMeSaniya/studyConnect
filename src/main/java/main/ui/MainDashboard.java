@@ -1018,7 +1018,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
         }
         
         sb.append("───────────────────────────────────────────────────────\n");
-        sb.append(String.format("\nTotal Participants: %d\n", quizResults.size()));
+        sb.append(String.format("\nTotal Participants: %d\n", sortedResults.size()));
         
         if (leaderboardArea != null) {
             leaderboardArea.setText(sb.toString());
