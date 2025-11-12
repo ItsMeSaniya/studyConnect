@@ -1,0 +1,228 @@
+===============================================
+FILE SHARING FEATURE - IMPLEMENTATION COMPLETE
+===============================================
+
+OVERVIEW:
+---------
+Implemented a comprehensive file sharing system in the Resources tab with:
+✅ File upload with progress bar
+✅ File download functionality
+✅ File deletion (admin or file owner only)
+✅ File list display with metadata
+✅ Real-time file list updates for all clients
+✅ Server-side file storage (in-memory + disk persistence)
+
+NEW FILES CREATED:
+------------------
+1. FileMetadata.java (model)
+   - Stores file information: name, size, uploader, upload time, type
+   - Formats file size (B, KB, MB, GB)
+   - Formats upload timestamp
+   - File type icons (📄 PDF, 📝 DOC, 📊 XLS, etc.)
+
+MODIFIED FILES:
+---------------
+1. Message.java
+   - Added new MessageType enum values:
+     * FILE_LIST_REQUEST - Client requests list of files
+     * FILE_LIST_RESPONSE - Server sends file list
+     * FILE_UPLOAD - Client uploads file to server
+     * FILE_DOWNLOAD_REQUEST - Client requests file download
+     * FILE_DELETE_REQUEST - Client/Admin deletes file
+   - Added fields:
+     * FileMetadata fileMetadata
+     * List<FileMetadata> fileList
+   - Added getters/setters for new fields
+
+2. MainDashboard.java
+   - Completely redesigned Resources tab with modern UI
+   - Added fields:
+     * DefaultListModel<FileMetadata> sharedFilesListModel
+     * JList<FileMetadata> sharedFilesList
+     * JProgressBar uploadProgressBar
+     * JLabel uploadStatusLabel
+     * List<FileMetadata> availableFiles
+   
+   - New UI Components:
+     * File list with custom renderer showing icon, name, size, uploader, date
+     * Upload button with progress tracking
+     * Download button
+     * Delete button (permission-based)
+     * Refresh button
+     * Status label for feedback
+   
+   - New Methods:
+     * requestFileList() - Request file list from server
+     * uploadFileToServer() - Choose file and upload
+     * performFileUpload(File) - SwingWorker with progress tracking
+     * downloadSelectedFile() - Download selected file
+     * deleteSelectedFile() - Delete with permission check
+     * getFileIcon(String) - Returns emoji icon for file type
+   
+   - Message Handlers:
+     * FILE_LIST_RESPONSE - Updates file list UI
+     * FILE_UPLOAD, FILE_DOWNLOAD_REQUEST, FILE_DELETE_REQUEST - Handled by server
+
+3. Server.java
+   - Added file storage system:
+     * List<FileMetadata> sharedFiles - Metadata list
+     * Map<String, byte[]> fileStorage - In-memory file storage
+     * String UPLOAD_DIR = "shared_files/" - Disk storage directory
+   
+   - New Methods:
+     * sendFileListToClient(PeerConnection) - Send file list to client
+     * handleFileUpload(Message, PeerConnection) - Save uploaded file
+     * handleFileDownload(Message, PeerConnection) - Send file to client
+     * handleFileDelete(Message, PeerConnection) - Delete file with permission check
+     * broadcastFileListUpdate() - Notify all clients of changes
+   
+   - Message Handlers in handleClientMessage():
+     * FILE_LIST_REQUEST → sendFileListToClient()
+     * FILE_UPLOAD → handleFileUpload()
+     * FILE_DOWNLOAD_REQUEST → handleFileDownload()
+     * FILE_DELETE_REQUEST → handleFileDelete()
+
+FEATURES:
+---------
+1. FILE UPLOAD:
+   - Choose file from file chooser
+   - File size limit: 50MB
+   - Progress bar shows: Reading (10%) → Uploading (50-75%) → Complete (100%)
+   - Status messages: "Reading file...", "Uploading...", "✓ Upload successful!"
+   - Auto-refresh file list after upload
+   - Stores file in memory AND on disk (shared_files/ directory)
+
+2. FILE LIST:
+   - Displays all shared files with:
+     * File icon (based on extension)
+     * File name
+     * File size (auto-formatted)
+     * Uploader username
+     * Upload date/time
+   - Custom cell renderer for beautiful list display
+   - Auto-refreshes when new files added/deleted
+   - Refresh button to manually update list
+
+3. FILE DOWNLOAD:
+   - Select file from list
+   - Choose save location
+   - Receive file from server
+   - Status feedback during download
+   - Save to user-selected location
+
+4. FILE DELETE:
+   - Select file from list
+   - Permission check:
+     * Admin can delete any file
+     * Users can only delete their own files
+   - Confirmation dialog before deletion
+   - Removes from:
+     * Server memory (fileStorage)
+     * File list (sharedFiles)
+     * Disk (shared_files/ directory)
+   - Broadcasts update to all clients
+
+5. FILE ICONS:
+   📄 PDF files
+   📝 Word documents (doc, docx)
+   📊 Excel spreadsheets (xls, xlsx)
+   📽 PowerPoint presentations (ppt, pptx)
+   📃 Text files
+   🖼 Images (jpg, jpeg, png, gif)
+   📦 Archives (zip, rar)
+   🎬 Videos (mp4, avi)
+   🎵 Audio files (mp3)
+   📎 Other files
+
+SECURITY:
+---------
+✅ File size limit (50MB) to prevent abuse
+✅ Permission-based deletion (admin or owner only)
+✅ Server validates all operations
+✅ File IDs use UUID to prevent conflicts
+✅ Files stored with ID prefix to avoid overwrites
+
+DATA FLOW:
+----------
+CLIENT → SERVER:
+1. Upload: FILE_UPLOAD message with FileMetadata + FileTransfer
+2. List: FILE_LIST_REQUEST message
+3. Download: FILE_DOWNLOAD_REQUEST with FileMetadata
+4. Delete: FILE_DELETE_REQUEST with FileMetadata
+
+SERVER → CLIENT:
+1. File List: FILE_LIST_RESPONSE with List<FileMetadata>
+2. File Data: FILE message with FileTransfer
+3. Updates: Broadcasts FILE_LIST_RESPONSE to all clients
+
+STORAGE:
+--------
+- In-Memory: Map<String, byte[]> fileStorage (fast access)
+- On-Disk: shared_files/ directory (persistence across restarts)
+- Metadata: List<FileMetadata> sharedFiles (searchable)
+
+FILE STRUCTURE:
+---------------
+shared_files/
+├── {UUID}_document.pdf
+├── {UUID}_notes.docx
+├── {UUID}_lecture.pptx
+└── ...
+
+TESTING CHECKLIST:
+------------------
+As Admin:
+☐ Start server
+☐ Login as admin
+☐ Go to Resources tab
+☐ Upload a file (should see progress bar)
+☐ Check "shared_files/" folder created
+☐ Upload another file with different type
+☐ See file icons display correctly
+
+As Student (Client):
+☐ Connect to server
+☐ Go to Resources tab
+☐ Click Refresh - see uploaded files
+☐ Select a file and download
+☐ Try to delete own file (should work)
+☐ Try to delete admin's file (should fail)
+☐ Upload a file from client side
+☐ Both admin and client should see new file
+
+Multiple Clients:
+☐ Connect 2-3 clients
+☐ Upload file from client 1
+☐ Client 2 & 3 should auto-see new file in list
+☐ Download file on client 2
+☐ Delete file on client 3 (if owner)
+☐ All clients should see file removed
+
+IMPROVEMENTS MADE:
+------------------
+✅ Removed old peer-to-peer file sending (replaced with shared resources)
+✅ Modern UI with file icons and metadata display
+✅ Progress tracking for uploads
+✅ Real-time synchronization across all clients
+✅ Permission-based security
+✅ Dual storage (memory + disk) for reliability
+✅ Auto-refresh after operations
+✅ User-friendly status messages
+✅ Confirmation dialogs for destructive operations
+
+NOTES:
+------
+- Whiteboard feature removed as requested
+- Other features (chat, quiz, broadcast, screen sharing) remain unchanged
+- File sharing works independently - no impact on existing features
+- Server automatically creates "shared_files/" directory on first upload
+
+NEXT STEPS:
+-----------
+1. Stop all Java processes: taskkill //F //IM java.exe
+2. Start server: java -jar target/StudyConnect-1.0.0.jar server
+3. Start client(s): java -jar target/StudyConnect-1.0.0.jar client
+4. Test file upload, download, delete functionality
+5. Verify file list updates in real-time for all connected clients
+
+===============================================

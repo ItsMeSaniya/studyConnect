@@ -23,6 +23,11 @@ public class Server {
     private Map<PeerConnection, Long> lastHeartbeatTime; // Track last heartbeat from each client
     private Thread connectionMonitor;
     private static final long CLIENT_TIMEOUT = 90000; // 90 seconds - longer than client heartbeat timeout
+    
+    // File sharing
+    private List<main.model.FileMetadata> sharedFiles; // List of shared files
+    private Map<String, byte[]> fileStorage; // Store actual file data by fileId
+    private static final String UPLOAD_DIR = "shared_files/";
 
     public Server(int port, MessageHandler messageHandler, String currentUsername) {
         this.port = port;
@@ -32,6 +37,11 @@ public class Server {
         this.connectionUsernames = new ConcurrentHashMap<>();
         this.lastHeartbeatTime = new ConcurrentHashMap<>();
         this.threadPool = Executors.newCachedThreadPool();
+        this.sharedFiles = new CopyOnWriteArrayList<>();
+        this.fileStorage = new ConcurrentHashMap<>();
+        
+        // Create upload directory
+        new java.io.File(UPLOAD_DIR).mkdirs();
     }
 
     /**
@@ -260,6 +270,26 @@ public class Server {
                 broadcastPeerList(); // Update peer list after someone leaves
                 break;
                 
+            case FILE_LIST_REQUEST:
+                // Client requests list of shared files
+                sendFileListToClient(connection);
+                break;
+                
+            case FILE_UPLOAD:
+                // Client uploads a file
+                handleFileUpload(message, connection);
+                break;
+                
+            case FILE_DOWNLOAD_REQUEST:
+                // Client requests to download a file
+                handleFileDownload(message, connection);
+                break;
+                
+            case FILE_DELETE_REQUEST:
+                // Client requests to delete a file
+                handleFileDelete(message, connection);
+                break;
+                
             default:
                 // For other types, just broadcast
                 broadcast(message);
@@ -365,5 +395,148 @@ public class Server {
         connectionMonitor.setDaemon(true);
         connectionMonitor.setName("ConnectionMonitor");
         connectionMonitor.start();
+    }
+    
+    /**
+     * Send list of shared files to a client
+     */
+    private void sendFileListToClient(PeerConnection connection) {
+        Message response = new Message("server", connectionUsernames.get(connection),
+            "FILE_LIST", Message.MessageType.FILE_LIST_RESPONSE);
+        response.setFileList(new ArrayList<>(sharedFiles));
+        connection.sendMessage(response);
+        System.out.println("[SERVER] Sent file list to " + connectionUsernames.get(connection) + 
+            " (" + sharedFiles.size() + " files)");
+    }
+    
+    /**
+     * Handle file upload from client
+     */
+    private void handleFileUpload(Message message, PeerConnection connection) {
+        main.model.FileMetadata metadata = message.getFileMetadata();
+        FileTransfer fileTransfer = message.getFileTransfer();
+        
+        if (metadata != null && fileTransfer != null) {
+            // Store file data
+            fileStorage.put(metadata.getFileId(), fileTransfer.getFileData());
+            
+            // Save file to disk (optional, for persistence)
+            try {
+                String fileName = UPLOAD_DIR + metadata.getFileId() + "_" + metadata.getFileName();
+                java.nio.file.Files.write(
+                    java.nio.file.Paths.get(fileName),
+                    fileTransfer.getFileData()
+                );
+                metadata.setFilePath(fileName);
+            } catch (Exception e) {
+                System.err.println("[SERVER] Failed to save file to disk: " + e.getMessage());
+            }
+            
+            // Add to shared files list
+            sharedFiles.add(metadata);
+            
+            System.out.println("[SERVER] File uploaded: " + metadata.getFileName() + 
+                " by " + metadata.getUploader() + " (" + metadata.getFormattedSize() + ")");
+            
+            // Notify all clients about new file
+            broadcastFileListUpdate();
+        }
+    }
+    
+    /**
+     * Handle file download request
+     */
+    private void handleFileDownload(Message message, PeerConnection connection) {
+        main.model.FileMetadata metadata = message.getFileMetadata();
+        
+        if (metadata != null) {
+            byte[] fileData = fileStorage.get(metadata.getFileId());
+            
+            if (fileData == null) {
+                // Try to read from disk
+                try {
+                    if (metadata.getFilePath() != null) {
+                        fileData = java.nio.file.Files.readAllBytes(
+                            java.nio.file.Paths.get(metadata.getFilePath())
+                        );
+                    }
+                } catch (Exception e) {
+                    System.err.println("[SERVER] Failed to read file from disk: " + e.getMessage());
+                }
+            }
+            
+            if (fileData != null) {
+                // Send file to client
+                FileTransfer fileTransfer = new FileTransfer(
+                    metadata.getFileName(),
+                    metadata.getFileSize(),
+                    fileData,
+                    "server",
+                    connectionUsernames.get(connection)
+                );
+                
+                Message fileMessage = new Message("server", connectionUsernames.get(connection),
+                    metadata.getFileName(), Message.MessageType.FILE);
+                fileMessage.setFileTransfer(fileTransfer);
+                
+                connection.sendMessage(fileMessage);
+                System.out.println("[SERVER] File downloaded: " + metadata.getFileName() + 
+                    " by " + connectionUsernames.get(connection));
+            } else {
+                System.err.println("[SERVER] File not found: " + metadata.getFileId());
+            }
+        }
+    }
+    
+    /**
+     * Handle file delete request
+     */
+    private void handleFileDelete(Message message, PeerConnection connection) {
+        main.model.FileMetadata metadata = message.getFileMetadata();
+        String requestUser = connectionUsernames.get(connection);
+        
+        if (metadata != null && requestUser != null) {
+            // Check permissions (admin or file owner)
+            boolean isAdmin = requestUser.equalsIgnoreCase("admin");
+            boolean isOwner = metadata.getUploader().equals(requestUser);
+            
+            if (isAdmin || isOwner) {
+                // Remove from list
+                sharedFiles.removeIf(f -> f.getFileId().equals(metadata.getFileId()));
+                
+                // Remove from storage
+                fileStorage.remove(metadata.getFileId());
+                
+                // Delete file from disk
+                try {
+                    if (metadata.getFilePath() != null) {
+                        java.nio.file.Files.deleteIfExists(
+                            java.nio.file.Paths.get(metadata.getFilePath())
+                        );
+                    }
+                } catch (Exception e) {
+                    System.err.println("[SERVER] Failed to delete file from disk: " + e.getMessage());
+                }
+                
+                System.out.println("[SERVER] File deleted: " + metadata.getFileName() + 
+                    " by " + requestUser);
+                
+                // Notify all clients about file list update
+                broadcastFileListUpdate();
+            } else {
+                System.err.println("[SERVER] Permission denied: " + requestUser + 
+                    " tried to delete " + metadata.getFileName());
+            }
+        }
+    }
+    
+    /**
+     * Broadcast updated file list to all clients
+     */
+    private void broadcastFileListUpdate() {
+        Message update = new Message("server", "all",
+            "FILE_LIST_UPDATE", Message.MessageType.FILE_LIST_RESPONSE);
+        update.setFileList(new ArrayList<>(sharedFiles));
+        broadcast(update);
     }
 }

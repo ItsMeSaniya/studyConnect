@@ -54,6 +54,11 @@ public class MainDashboard extends JFrame implements MessageHandler {
     // File sharing components
     private JComboBox<String> fileTargetSelector;
     private JTextArea fileHistoryArea;
+    private DefaultListModel<FileMetadata> sharedFilesListModel;
+    private JList<FileMetadata> sharedFilesList;
+    private JProgressBar uploadProgressBar;
+    private JLabel uploadStatusLabel;
+    private List<FileMetadata> availableFiles;
     
     // Quiz components
     private QuizCreatorPanel quizCreatorPanel;
@@ -89,6 +94,8 @@ public class MainDashboard extends JFrame implements MessageHandler {
         this.p2pChatPanels = new HashMap<>();
         this.p2pInputFields = new HashMap<>();
         this.p2pPeerListModel = new DefaultListModel<>();
+        this.sharedFilesListModel = new DefaultListModel<>();
+        this.availableFiles = new ArrayList<>();
         
         // Start UDP listener for notifications - but don't show popups
         notificationClient = new NotificationClient(msg -> {
@@ -1176,69 +1183,172 @@ public class MainDashboard extends JFrame implements MessageHandler {
         panel.setBackground(Color.WHITE);
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         
-        // Title
-        JLabel titleLabel = new JLabel("📚 Study Resources");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
+        // Title Header
+        JPanel headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setBackground(Color.WHITE);
+        headerPanel.setBorder(new EmptyBorder(0, 0, 15, 0));
         
-        // Info label
-        JLabel infoLabel = new JLabel("Share study materials, notes, and documents");
+        JLabel titleLabel = new JLabel("📚 Shared Resources");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        
+        JLabel infoLabel = new JLabel("Upload and download study materials with the class");
         infoLabel.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         infoLabel.setForeground(new Color(100, 100, 100));
-        infoLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
-        // File history area
-        fileHistoryArea = new JTextArea();
-        fileHistoryArea.setEditable(false);
-        fileHistoryArea.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        fileHistoryArea.setLineWrap(true);
-        fileHistoryArea.setWrapStyleWord(true);
-        fileHistoryArea.setText("Resource sharing history will appear here...\n");
-        JScrollPane historyScrollPane = new JScrollPane(fileHistoryArea);
-        historyScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        JPanel titleBox = new JPanel(new BorderLayout());
+        titleBox.setOpaque(false);
+        titleBox.add(titleLabel, BorderLayout.NORTH);
+        titleBox.add(infoLabel, BorderLayout.SOUTH);
         
-        // File sharing control panel
-        JPanel fileControlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
-        fileControlPanel.setBackground(Color.WHITE);
-        fileControlPanel.setBorder(BorderFactory.createCompoundBorder(
-            new EmptyBorder(10, 0, 0, 0),
-            BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200)), 
-                "Send File",
-                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
-                javax.swing.border.TitledBorder.DEFAULT_POSITION,
-                new Font("Segoe UI", Font.BOLD, 12))));
+        JButton refreshButton = new JButton("🔄 Refresh");
+        refreshButton.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        refreshButton.setFocusPainted(false);
+        refreshButton.addActionListener(e -> requestFileList());
         
-        JLabel selectPeerLabel = new JLabel("Send to:");
-        selectPeerLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        headerPanel.add(titleBox, BorderLayout.WEST);
+        headerPanel.add(refreshButton, BorderLayout.EAST);
         
-        fileTargetSelector = new JComboBox<>();
-        fileTargetSelector.addItem("Select recipient...");
-        fileTargetSelector.setPreferredSize(new Dimension(250, 30));
-        fileTargetSelector.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        // Files List Panel
+        JPanel filesPanel = new JPanel(new BorderLayout());
+        filesPanel.setBackground(Color.WHITE);
+        filesPanel.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createLineBorder(new Color(200, 200, 200)), 
+            "Available Files",
+            javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
+            javax.swing.border.TitledBorder.DEFAULT_POSITION,
+            new Font("Segoe UI", Font.BOLD, 13)));
         
-        JButton sendFileButton = new JButton("📎 Choose & Send File");
-        sendFileButton.setBackground(new Color(52, 168, 83));
-        sendFileButton.setForeground(Color.WHITE);
-        sendFileButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        sendFileButton.setFocusPainted(false);
-        sendFileButton.setPreferredSize(new Dimension(180, 35));
-        sendFileButton.addActionListener(e -> selectAndSendFile());
+        // Custom cell renderer for file list
+        sharedFilesList = new JList<>(sharedFilesListModel);
+        sharedFilesList.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        sharedFilesList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        sharedFilesList.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value,
+                                                         int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof FileMetadata) {
+                    FileMetadata file = (FileMetadata) value;
+                    String icon = getFileIcon(file.getFileType());
+                    setText(String.format("<html><b>%s %s</b><br>" +
+                                        "<font size='2' color='gray'>%s • Uploaded by %s • %s</font></html>",
+                        icon, file.getFileName(), file.getFormattedSize(), 
+                        file.getUploader(), file.getFormattedUploadTime()));
+                }
+                setBorder(new EmptyBorder(5, 10, 5, 10));
+                return this;
+            }
+        });
         
-        fileControlPanel.add(selectPeerLabel);
-        fileControlPanel.add(fileTargetSelector);
-        fileControlPanel.add(sendFileButton);
+        JScrollPane filesScrollPane = new JScrollPane(sharedFilesList);
+        filesScrollPane.setPreferredSize(new Dimension(0, 300));
         
-        JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.setOpaque(false);
-        topPanel.add(titleLabel, BorderLayout.NORTH);
-        topPanel.add(infoLabel, BorderLayout.SOUTH);
+        // File Actions Panel
+        JPanel fileActionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        fileActionsPanel.setOpaque(false);
         
-        panel.add(topPanel, BorderLayout.NORTH);
-        panel.add(historyScrollPane, BorderLayout.CENTER);
-        panel.add(fileControlPanel, BorderLayout.SOUTH);
+        JButton downloadButton = new JButton("⬇ Download");
+        downloadButton.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        downloadButton.setBackground(new Color(33, 150, 243));
+        downloadButton.setForeground(Color.WHITE);
+        downloadButton.setFocusPainted(false);
+        downloadButton.addActionListener(e -> downloadSelectedFile());
+        
+        JButton deleteButton = new JButton("� Delete");
+        deleteButton.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        deleteButton.setBackground(new Color(244, 67, 54));
+        deleteButton.setForeground(Color.WHITE);
+        deleteButton.setFocusPainted(false);
+        deleteButton.addActionListener(e -> deleteSelectedFile());
+        
+        fileActionsPanel.add(downloadButton);
+        fileActionsPanel.add(deleteButton);
+        
+        JPanel filesListPanel = new JPanel(new BorderLayout());
+        filesListPanel.setOpaque(false);
+        filesListPanel.add(filesScrollPane, BorderLayout.CENTER);
+        filesListPanel.add(fileActionsPanel, BorderLayout.SOUTH);
+        
+        filesPanel.add(filesListPanel, BorderLayout.CENTER);
+        
+        // Upload Panel
+        JPanel uploadPanel = new JPanel();
+        uploadPanel.setLayout(new BoxLayout(uploadPanel, BoxLayout.Y_AXIS));
+        uploadPanel.setBackground(Color.WHITE);
+        uploadPanel.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createLineBorder(new Color(200, 200, 200)), 
+            "Upload New File",
+            javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
+            javax.swing.border.TitledBorder.DEFAULT_POSITION,
+            new Font("Segoe UI", Font.BOLD, 13)));
+        
+        JPanel uploadButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        uploadButtonPanel.setOpaque(false);
+        
+        JButton uploadButton = new JButton("📤 Choose File to Upload");
+        uploadButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        uploadButton.setBackground(new Color(76, 175, 80));
+        uploadButton.setForeground(Color.WHITE);
+        uploadButton.setFocusPainted(false);
+        uploadButton.setPreferredSize(new Dimension(220, 35));
+        uploadButton.addActionListener(e -> uploadFileToServer());
+        
+        uploadButtonPanel.add(uploadButton);
+        
+        // Progress bar
+        uploadProgressBar = new JProgressBar(0, 100);
+        uploadProgressBar.setStringPainted(true);
+        uploadProgressBar.setVisible(false);
+        uploadProgressBar.setPreferredSize(new Dimension(400, 25));
+        
+        uploadStatusLabel = new JLabel(" ");
+        uploadStatusLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
+        uploadStatusLabel.setForeground(new Color(100, 100, 100));
+        
+        JPanel progressPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        progressPanel.setOpaque(false);
+        progressPanel.add(uploadProgressBar);
+        
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        statusPanel.setOpaque(false);
+        statusPanel.add(uploadStatusLabel);
+        
+        uploadPanel.add(uploadButtonPanel);
+        uploadPanel.add(progressPanel);
+        uploadPanel.add(statusPanel);
+        
+        // Main layout
+        panel.add(headerPanel, BorderLayout.NORTH);
+        panel.add(filesPanel, BorderLayout.CENTER);
+        panel.add(uploadPanel, BorderLayout.SOUTH);
+        
+        // Request file list when tab is created
+        requestFileList();
         
         return panel;
+    }
+    
+    private String getFileIcon(String fileType) {
+        switch (fileType.toLowerCase()) {
+            case "pdf": return "📄";
+            case "doc":
+            case "docx": return "📝";
+            case "xls":
+            case "xlsx": return "📊";
+            case "ppt":
+            case "pptx": return "📽";
+            case "txt": return "📃";
+            case "jpg":
+            case "jpeg":
+            case "png":
+            case "gif": return "🖼";
+            case "zip":
+            case "rar": return "📦";
+            case "mp4":
+            case "avi": return "🎬";
+            case "mp3": return "🎵";
+            default: return "📎";
+        }
     }
     
     private JPanel createBroadcastTab() {
@@ -2252,6 +2362,236 @@ public class MainDashboard extends JFrame implements MessageHandler {
         }
     }
     
+    /**
+     * Request list of shared files from server
+     */
+    private void requestFileList() {
+        if (serverClient == null || !serverClient.isConnected()) {
+            uploadStatusLabel.setText("Not connected to server");
+            uploadStatusLabel.setForeground(Color.RED);
+            return;
+        }
+        
+        Message request = new Message(currentUser.getUsername(), "server",
+            "REQUEST_FILE_LIST", Message.MessageType.FILE_LIST_REQUEST);
+        serverClient.sendMessage(request);
+        uploadStatusLabel.setText("Refreshing file list...");
+        uploadStatusLabel.setForeground(new Color(100, 100, 100));
+    }
+    
+    /**
+     * Upload file to server
+     */
+    private void uploadFileToServer() {
+        if (serverClient == null || !serverClient.isConnected()) {
+            JOptionPane.showMessageDialog(this,
+                "You must be connected to the server first!",
+                "Not Connected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Select File to Upload");
+        
+        int result = fileChooser.showOpenDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            java.io.File selectedFile = fileChooser.getSelectedFile();
+            
+            // Check file size (limit to 50MB)
+            if (selectedFile.length() > 50 * 1024 * 1024) {
+                JOptionPane.showMessageDialog(this,
+                    "File is too large! Maximum size is 50MB.",
+                    "File Too Large", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            // Confirm upload
+            int confirm = JOptionPane.showConfirmDialog(this,
+                "Upload this file to shared resources?\n\n" +
+                "File: " + selectedFile.getName() + "\n" +
+                "Size: " + formatFileSize(selectedFile.length()),
+                "Confirm Upload",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+            
+            if (confirm == JOptionPane.YES_OPTION) {
+                performFileUpload(selectedFile);
+            }
+        }
+    }
+    
+    /**
+     * Perform the actual file upload with progress
+     */
+    private void performFileUpload(java.io.File file) {
+        SwingWorker<Void, Integer> worker = new SwingWorker<Void, Integer>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                try {
+                    uploadProgressBar.setVisible(true);
+                    uploadStatusLabel.setText("Reading file...");
+                    publish(10);
+                    
+                    // Read file data
+                    byte[] fileData = java.nio.file.Files.readAllBytes(file.toPath());
+                    publish(50);
+                    
+                    uploadStatusLabel.setText("Uploading to server...");
+                    
+                    // Create file metadata
+                    String fileId = java.util.UUID.randomUUID().toString();
+                    FileMetadata metadata = new FileMetadata(fileId, file.getName(),
+                        file.length(), currentUser.getUsername());
+                    
+                    // Create file transfer
+                    FileTransfer fileTransfer = new FileTransfer(
+                        file.getName(),
+                        file.length(),
+                        fileData,
+                        currentUser.getUsername(),
+                        "server"
+                    );
+                    
+                    // Send to server
+                    Message uploadMsg = new Message(currentUser.getUsername(), "server",
+                        "UPLOAD_FILE", Message.MessageType.FILE_UPLOAD);
+                    uploadMsg.setFileMetadata(metadata);
+                    uploadMsg.setFileTransfer(fileTransfer);
+                    
+                    publish(75);
+                    serverClient.sendMessage(uploadMsg);
+                    publish(100);
+                    
+                    Thread.sleep(500); // Brief pause to show 100%
+                    
+                } catch (Exception e) {
+                    throw e;
+                }
+                return null;
+            }
+            
+            @Override
+            protected void process(java.util.List<Integer> chunks) {
+                for (int progress : chunks) {
+                    uploadProgressBar.setValue(progress);
+                }
+            }
+            
+            @Override
+            protected void done() {
+                try {
+                    get(); // Check for exceptions
+                    uploadStatusLabel.setText("✓ Upload successful!");
+                    uploadStatusLabel.setForeground(new Color(76, 175, 80));
+                    uploadProgressBar.setValue(0);
+                    uploadProgressBar.setVisible(false);
+                    
+                    // Refresh file list
+                    SwingUtilities.invokeLater(() -> {
+                        try {
+                            Thread.sleep(1000);
+                            requestFileList();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    });
+                    
+                } catch (Exception e) {
+                    uploadStatusLabel.setText("✗ Upload failed: " + e.getMessage());
+                    uploadStatusLabel.setForeground(Color.RED);
+                    uploadProgressBar.setValue(0);
+                    uploadProgressBar.setVisible(false);
+                    JOptionPane.showMessageDialog(MainDashboard.this,
+                        "Failed to upload file: " + e.getMessage(),
+                        "Upload Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        };
+        
+        worker.execute();
+    }
+    
+    /**
+     * Download selected file from server
+     */
+    private void downloadSelectedFile() {
+        FileMetadata selectedFile = sharedFilesList.getSelectedValue();
+        if (selectedFile == null) {
+            JOptionPane.showMessageDialog(this,
+                "Please select a file to download",
+                "No File Selected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        if (serverClient == null || !serverClient.isConnected()) {
+            JOptionPane.showMessageDialog(this,
+                "You must be connected to the server first!",
+                "Not Connected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        // Ask where to save
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Save Downloaded File");
+        fileChooser.setSelectedFile(new java.io.File(selectedFile.getFileName()));
+        
+        int result = fileChooser.showSaveDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            java.io.File saveLocation = fileChooser.getSelectedFile();
+            
+            // Send download request
+            Message downloadRequest = new Message(currentUser.getUsername(), "server",
+                selectedFile.getFileId(), Message.MessageType.FILE_DOWNLOAD_REQUEST);
+            downloadRequest.setFileMetadata(selectedFile);
+            
+            // Store save location for when file arrives
+            downloadRequest.setContent(saveLocation.getAbsolutePath());
+            
+            serverClient.sendMessage(downloadRequest);
+            uploadStatusLabel.setText("Downloading " + selectedFile.getFileName() + "...");
+            uploadStatusLabel.setForeground(new Color(33, 150, 243));
+        }
+    }
+    
+    /**
+     * Delete selected file (admin only or own files)
+     */
+    private void deleteSelectedFile() {
+        FileMetadata selectedFile = sharedFilesList.getSelectedValue();
+        if (selectedFile == null) {
+            JOptionPane.showMessageDialog(this,
+                "Please select a file to delete",
+                "No File Selected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        boolean isAdmin = currentUser.getUsername().equalsIgnoreCase("admin");
+        boolean isOwner = selectedFile.getUploader().equals(currentUser.getUsername());
+        
+        if (!isAdmin && !isOwner) {
+            JOptionPane.showMessageDialog(this,
+                "You can only delete your own files!",
+                "Permission Denied", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "Delete this file?\n\n" + selectedFile.toString(),
+            "Confirm Delete",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE);
+        
+        if (confirm == JOptionPane.YES_OPTION) {
+            Message deleteRequest = new Message(currentUser.getUsername(), "server",
+                selectedFile.getFileId(), Message.MessageType.FILE_DELETE_REQUEST);
+            deleteRequest.setFileMetadata(selectedFile);
+            
+            serverClient.sendMessage(deleteRequest);
+            uploadStatusLabel.setText("Deleting " + selectedFile.getFileName() + "...");
+            uploadStatusLabel.setForeground(new Color(244, 67, 54));
+        }
+    }
+    
     private void handleLogout() {
         int result = JOptionPane.showConfirmDialog(this,
             "Are you sure you want to logout?",
@@ -2785,6 +3125,38 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     
                     // Don't show quiz messages in group chat
                 }
+                break;
+                
+            case FILE_LIST_RESPONSE:
+                // Received list of shared files from server
+                java.util.List<FileMetadata> fileList = message.getFileList();
+                if (fileList != null) {
+                    SwingUtilities.invokeLater(() -> {
+                        sharedFilesListModel.clear();
+                        availableFiles.clear();
+                        for (FileMetadata file : fileList) {
+                            sharedFilesListModel.addElement(file);
+                            availableFiles.add(file);
+                        }
+                        uploadStatusLabel.setText("✓ Found " + fileList.size() + " shared file(s)");
+                        uploadStatusLabel.setForeground(new Color(100, 100, 100));
+                    });
+                }
+                break;
+                
+            case FILE_UPLOAD:
+                // Server received file upload (server-side handling)
+                // This should be handled in Server.java
+                break;
+                
+            case FILE_DOWNLOAD_REQUEST:
+                // Server received download request (server-side handling)
+                // This should be handled in Server.java
+                break;
+                
+            case FILE_DELETE_REQUEST:
+                // Server received delete request (server-side handling)
+                // This should be handled in Server.java
                 break;
                 
             default:
