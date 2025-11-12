@@ -193,8 +193,13 @@ public class Server {
      * Broadcast the list of connected peers to all clients
      */
     private void broadcastPeerList() {
-        // Create a list of usernames
+        // Create a list of usernames including admin
         StringBuilder peerList = new StringBuilder();
+        
+        // Add admin first so clients can message the admin
+        peerList.append("admin").append(",");
+        
+        // Add all connected clients
         for (String username : connectionUsernames.values()) {
             peerList.append(username).append(",");
         }

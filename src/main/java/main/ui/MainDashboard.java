@@ -58,6 +58,10 @@ public class MainDashboard extends JFrame implements MessageHandler {
     private JButton stopServerButton;
     private JButton connectPeerButton;
     private JButton sendFileButton;
+    private JButton connectToServerButton;
+    private JButton disconnectFromServerButton;
+    private JTextField serverIpField;
+    private JTextField serverPortField;
     private JLabel statusLabel;
     private JLabel ipLabel;
     private JTextField portField;
@@ -231,7 +235,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
             JPanel ipPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
             ipPanel.setOpaque(false);
             ipPanel.add(new JLabel("Server IP:"));
-            JTextField serverIpField = new JTextField("127.0.0.1", 12);
+            serverIpField = new JTextField("127.0.0.1", 12);
             ipPanel.add(serverIpField);
             ipPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
             
@@ -239,12 +243,12 @@ public class MainDashboard extends JFrame implements MessageHandler {
             JPanel portPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
             portPanel.setOpaque(false);
             portPanel.add(new JLabel("Port:"));
-            JTextField serverPortField = new JTextField("8888", 8);
+            serverPortField = new JTextField("8888", 8);
             portPanel.add(serverPortField);
             portPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
             
             // Connect button
-            JButton connectToServerButton = new JButton("Connect to Server");
+            connectToServerButton = new JButton("Connect to Server");
             connectToServerButton.setBackground(new Color(66, 133, 244));
             connectToServerButton.setForeground(Color.WHITE);
             connectToServerButton.setFocusPainted(false);
@@ -273,11 +277,22 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 }
             });
             
+            // Disconnect button
+            disconnectFromServerButton = new JButton("Disconnect from Server");
+            disconnectFromServerButton.setBackground(new Color(234, 67, 53));
+            disconnectFromServerButton.setForeground(Color.WHITE);
+            disconnectFromServerButton.setFocusPainted(false);
+            disconnectFromServerButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+            disconnectFromServerButton.setMaximumSize(new Dimension(200, 35));
+            disconnectFromServerButton.setVisible(false); // Hidden initially
+            disconnectFromServerButton.addActionListener(e -> disconnectFromServer());
+            
             connectPanel.add(ipPanel);
             connectPanel.add(Box.createVerticalStrut(5));
             connectPanel.add(portPanel);
             connectPanel.add(Box.createVerticalStrut(10));
             connectPanel.add(connectToServerButton);
+            connectPanel.add(disconnectFromServerButton);
             
             topPanel.add(connectPanel);
         }
@@ -648,6 +663,14 @@ public class MainDashboard extends JFrame implements MessageHandler {
     
     // Overloaded method that accepts IP and port directly
     private void connectToPeer(String ip, int port) {
+        // Check if already connected
+        if (!connectedPeers.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Already connected to a server. Disconnect first.",
+                "Already Connected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
         if (!NetworkUtil.isValidIPAddress(ip)) {
             JOptionPane.showMessageDialog(this,
                 "Please enter a valid IP address",
@@ -674,15 +697,12 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     Message.MessageType.USER_JOIN);
                 client.sendMessage(greeting);
                 
-                // Update peer selector to show server/admin
+                // Toggle buttons
                 SwingUtilities.invokeLater(() -> {
-                    peerSelector.removeAllItems();
-                    peerSelector.addItem("Select a peer...");
-                    peerSelector.addItem("Server (Admin)");
-                    
-                    // Store server connection for P2P messaging
-                    String peerAddress = ip + ":" + port;
-                    peerUsernames.put(peerAddress, "Server (Admin)");
+                    connectToServerButton.setVisible(false);
+                    disconnectFromServerButton.setVisible(true);
+                    serverIpField.setEnabled(false);
+                    serverPortField.setEnabled(false);
                 });
                 
                 appendToChat("[SYSTEM] ✅ Connected to " + ip + ":" + port);
@@ -691,6 +711,56 @@ public class MainDashboard extends JFrame implements MessageHandler {
             JOptionPane.showMessageDialog(this,
                 "Failed to connect: " + e.getMessage(),
                 "Connection Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    private void disconnectFromServer() {
+        if (connectedPeers.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Not connected to any server",
+                "Not Connected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        int result = JOptionPane.showConfirmDialog(this,
+            "Are you sure you want to disconnect from the server?",
+            "Confirm Disconnect", JOptionPane.YES_NO_OPTION);
+        
+        if (result == JOptionPane.YES_OPTION) {
+            // Send leave message
+            Message leaveMsg = new Message(currentUser.getUsername(), "all",
+                currentUser.getUsername() + " has left the chat",
+                Message.MessageType.USER_LEAVE);
+            
+            for (Client client : connectedPeers) {
+                try {
+                    client.sendMessage(leaveMsg);
+                    client.disconnect();
+                } catch (Exception e) {
+                    System.err.println("Error disconnecting: " + e.getMessage());
+                }
+            }
+            
+            // Clear connections
+            connectedPeers.clear();
+            peerListModel.clear();
+            
+            // Clear peer selector
+            SwingUtilities.invokeLater(() -> {
+                peerSelector.removeAllItems();
+                peerSelector.addItem("Select a peer...");
+                
+                fileTargetSelector.removeAllItems();
+                fileTargetSelector.addItem("Select recipient...");
+                
+                // Toggle buttons
+                connectToServerButton.setVisible(true);
+                disconnectFromServerButton.setVisible(false);
+                serverIpField.setEnabled(true);
+                serverPortField.setEnabled(true);
+            });
+            
+            appendToChat("[SYSTEM] ❌ Disconnected from server");
         }
     }
     
@@ -1080,7 +1150,19 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 
             case PEER_TO_PEER:
                 // Display received P2P message
-                appendToP2PChat(message.getSender() + " → You: " + message.getContent());
+                String recipient = message.getRecipient();
+                boolean isForCurrentUser = recipient != null && 
+                    recipient.equalsIgnoreCase(currentUser.getUsername());
+                
+                String p2pDisplay;
+                if (isForCurrentUser) {
+                    // Message is for current user
+                    p2pDisplay = message.getSender() + " → You: " + message.getContent();
+                } else {
+                    // Message is between other users (admin observing)
+                    p2pDisplay = message.getSender() + " → " + recipient + ": " + message.getContent();
+                }
+                appendToP2PChat(p2pDisplay);
                 break;
                 
             case FILE:
@@ -1166,14 +1248,27 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 String[] peers = message.getContent().split(",");
                 
                 SwingUtilities.invokeLater(() -> {
+                    // Clear and rebuild peer selector (prevents duplicates)
                     peerSelector.removeAllItems();
                     peerSelector.addItem("Select a peer...");
                     
+                    // Use a Set to track unique peers
+                    java.util.Set<String> uniquePeers = new java.util.HashSet<>();
+                    
                     for (String peer : peers) {
-                        if (!peer.trim().isEmpty() && 
-                            !peer.trim().equals(currentUser.getUsername())) {
-                            peerSelector.addItem(peer.trim());
+                        String trimmedPeer = peer.trim();
+                        if (!trimmedPeer.isEmpty() && 
+                            !trimmedPeer.equals(currentUser.getUsername()) &&
+                            uniquePeers.add(trimmedPeer)) { // Only add if not already in set
+                            peerSelector.addItem(trimmedPeer);
                         }
+                    }
+                    
+                    // Also update file target selector
+                    fileTargetSelector.removeAllItems();
+                    fileTargetSelector.addItem("Select recipient...");
+                    for (String peer : uniquePeers) {
+                        fileTargetSelector.addItem(peer);
                     }
                     
                     System.out.println("[DEBUG] Updated peer list: " + Arrays.toString(peers));
