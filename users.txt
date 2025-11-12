@@ -1,5 +1,9 @@
 Test:test:
 swetha:123:
+hasthika:Hasthika123:
 Sahan:12345:
 admin:admin:admin@studyconnect.com
 vishwa:123:
+pawan:Pawan123:
+user:user:
+jaya:Jaya123:

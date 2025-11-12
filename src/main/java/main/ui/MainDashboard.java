@@ -229,7 +229,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
             JPanel ipPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
             ipPanel.setOpaque(false);
             ipPanel.add(new JLabel("Server IP:"));
-            JTextField serverIpField = new JTextField("", 12);
+            serverIpField = new JTextField("", 12);
             serverIpField.setToolTipText("Enter the admin's IP address (e.g., 192.168.1.3)");
             ipPanel.add(serverIpField);
             ipPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -844,8 +844,12 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 SwingUtilities.invokeLater(() -> {
                     connectToServerButton.setVisible(false);
                     disconnectFromServerButton.setVisible(true);
-                    serverIpField.setEnabled(false);
-                    serverPortField.setEnabled(false);
+                    if (serverIpField != null) {
+                        serverIpField.setEnabled(false);
+                    }
+                    if (serverPortField != null) {
+                        serverPortField.setEnabled(false);
+                    }
                 });
                 
                 appendToChat("[SYSTEM] ✅ Connected to " + ip + ":" + port);
@@ -1015,7 +1019,9 @@ public class MainDashboard extends JFrame implements MessageHandler {
         sb.append("───────────────────────────────────────────────────────\n");
         sb.append(String.format("\nTotal Participants: %d\n", quizResults.size()));
         
-        leaderboardArea.setText(sb.toString());
+        if (leaderboardArea != null) {
+            leaderboardArea.setText(sb.toString());
+        }
     }
 
     private void sendP2PMessage() {
@@ -1570,21 +1576,23 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     updateLeaderboard();
                     
                     // Automatically broadcast updated leaderboard to all students in real-time
-                    String leaderboardText = leaderboardArea.getText();
-                    Message leaderboardMsg = new Message(
-                        currentUser.getUsername(),
-                        "all",
-                        leaderboardText,
-                        Message.MessageType.BROADCAST
-                    );
-                    
-                    // Send to all connected peers
-                    for (Client client : connectedPeers) {
-                        client.sendMessage(leaderboardMsg);
-                    }
-                    
-                    if (server != null && server.isRunning()) {
-                        server.broadcast(leaderboardMsg);
+                    if (leaderboardArea != null) {
+                        String leaderboardText = leaderboardArea.getText();
+                        Message leaderboardMsg = new Message(
+                            currentUser.getUsername(),
+                            "all",
+                            leaderboardText,
+                            Message.MessageType.BROADCAST
+                        );
+                        
+                        // Send to all connected peers
+                        for (Client client : connectedPeers) {
+                            client.sendMessage(leaderboardMsg);
+                        }
+                        
+                        if (server != null && server.isRunning()) {
+                            server.broadcast(leaderboardMsg);
+                        }
                     }
                     
                     // Don't show quiz completion messages in group chat
