@@ -49,9 +49,10 @@ public class QuizCreatorPanel extends JPanel {
         
         // Duration panel
         JPanel durationPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        durationPanel.add(new JLabel("Duration (seconds):"));
-        durationSpinner = new JSpinner(new SpinnerNumberModel(60, 10, 600, 10));
+        durationPanel.add(new JLabel("Duration:"));
+        durationSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 60, 1));
         durationPanel.add(durationSpinner);
+        durationPanel.add(new JLabel("minutes"));
         
         JPanel topPanel = new JPanel(new GridLayout(2, 1, 5, 5));
         topPanel.add(titlePanel);
@@ -201,8 +202,9 @@ public class QuizCreatorPanel extends JPanel {
             return;
         }
         
-        int duration = (Integer) durationSpinner.getValue();
-        Quiz quiz = new Quiz(title, duration);
+        int durationMinutes = (Integer) durationSpinner.getValue();
+        int durationSeconds = durationMinutes * 60; // Convert minutes to seconds
+        Quiz quiz = new Quiz(title, durationSeconds);
         
         for (QuizQuestion question : questions) {
             quiz.addQuestion(question);
@@ -214,11 +216,15 @@ public class QuizCreatorPanel extends JPanel {
             listener.onQuizCreated(quiz);
         }
         
-        // Reset form
+        // Reset form for next quiz
         titleField.setText("");
+        titleField.setEnabled(true);
         questions.clear();
         questionsModel.clear();
-        durationSpinner.setValue(60);
+        durationSpinner.setValue(5);
+        durationSpinner.setEnabled(true);
+        addQuestionButton.setEnabled(true);
+        createQuizButton.setEnabled(true);
         
         JOptionPane.showMessageDialog(this, 
             "Quiz created and started!\nSent to all connected peers.", 

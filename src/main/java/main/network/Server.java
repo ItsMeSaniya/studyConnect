@@ -115,11 +115,7 @@ public class Server {
         for (PeerConnection conn : connections) {
             conn.sendMessage(message);
         }
-        if (!message.getSender().equals(currentUsername)) {
-            NotificationServer.notify(
-                    "New message from " + message.getSender() + ": " + message.getContent());
-
-        }
+        // Don't show popup notifications for broadcasts
     }
 
     /**
@@ -135,10 +131,8 @@ public class Server {
                 String username = message.getSender();
                 connectionUsernames.put(connection, username);
                 
-                // Broadcast user join to all clients
-                Message joinMsg = new Message("System", "all",
-                    username + " has joined", Message.MessageType.USER_JOIN);
-                broadcast(joinMsg);
+                // Just broadcast the join message once (don't create a new one)
+                broadcast(message);
                 
                 // Send updated peer list to all clients
                 broadcastPeerList();
