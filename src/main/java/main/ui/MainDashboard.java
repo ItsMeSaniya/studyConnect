@@ -59,6 +59,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
     private JProgressBar uploadProgressBar;
     private JLabel uploadStatusLabel;
     private List<FileMetadata> availableFiles;
+    private Map<String, String> pendingDownloads; // Map fileId -> save path
     
     // Quiz components
     private QuizCreatorPanel quizCreatorPanel;
@@ -96,6 +97,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
         this.p2pPeerListModel = new DefaultListModel<>();
         this.sharedFilesListModel = new DefaultListModel<>();
         this.availableFiles = new ArrayList<>();
+        this.pendingDownloads = new HashMap<>();
         
         // Start UDP listener for notifications - but don't show popups
         notificationClient = new NotificationClient(msg -> {
@@ -2619,13 +2621,13 @@ public class MainDashboard extends JFrame implements MessageHandler {
                         "File Not Found", JOptionPane.ERROR_MESSAGE);
                 }
             } else {
-                // Client: Send download request
+                // Client: Send download request and store save location
                 Message downloadRequest = new Message(currentUser.getUsername(), "server",
                     selectedFile.getFileId(), Message.MessageType.FILE_DOWNLOAD_REQUEST);
                 downloadRequest.setFileMetadata(selectedFile);
                 
-                // Store save location for when file arrives
-                downloadRequest.setContent(saveLocation.getAbsolutePath());
+                // Store save location in map for when file arrives
+                pendingDownloads.put(selectedFile.getFileId(), saveLocation.getAbsolutePath());
                 
                 serverClient.sendMessage(downloadRequest);
                 uploadStatusLabel.setText("Downloading " + selectedFile.getFileName() + "...");
@@ -2859,21 +2861,50 @@ public class MainDashboard extends JFrame implements MessageHandler {
                     appendToFileHistory("[" + getCurrentTime() + "] Received '" + fileName + 
                         "' from " + sender + " (" + formatFileSize(fileSize) + ")");
                     
-                    // Show download dialog
-                    SwingUtilities.invokeLater(() -> {
-                        int choice = JOptionPane.showConfirmDialog(this,
-                            "Received file: " + fileName + "\n" +
-                            "From: " + sender + "\n" +
-                            "Size: " + formatFileSize(fileSize) + "\n\n" +
-                            "Do you want to save this file?",
-                            "File Received", 
-                            JOptionPane.YES_NO_OPTION,
-                            JOptionPane.QUESTION_MESSAGE);
-                        
-                        if (choice == JOptionPane.YES_OPTION) {
-                            saveReceivedFile(fileTransfer);
-                        }
-                    });
+                    // Check if this is a response to a download request
+                    String savedPath = pendingDownloads.remove(fileName);
+                    if (savedPath != null) {
+                        // Auto-save to pre-selected location (from download request)
+                        SwingUtilities.invokeLater(() -> {
+                            try {
+                                java.nio.file.Files.write(
+                                    java.nio.file.Paths.get(savedPath), 
+                                    fileTransfer.getFileData()
+                                );
+                                uploadStatusLabel.setText("✓ Downloaded: " + fileName);
+                                JOptionPane.showMessageDialog(
+                                    this,
+                                    "File downloaded successfully!\nSaved to: " + savedPath,
+                                    "Download Complete",
+                                    JOptionPane.INFORMATION_MESSAGE
+                                );
+                            } catch (Exception e) {
+                                uploadStatusLabel.setText("✗ Download failed: " + fileName);
+                                JOptionPane.showMessageDialog(
+                                    this,
+                                    "Failed to save file: " + e.getMessage(),
+                                    "Download Error",
+                                    JOptionPane.ERROR_MESSAGE
+                                );
+                            }
+                        });
+                    } else {
+                        // P2P file transfer - show download dialog
+                        SwingUtilities.invokeLater(() -> {
+                            int choice = JOptionPane.showConfirmDialog(this,
+                                "Received file: " + fileName + "\n" +
+                                "From: " + sender + "\n" +
+                                "Size: " + formatFileSize(fileSize) + "\n\n" +
+                                "Do you want to save this file?",
+                                "File Received", 
+                                JOptionPane.YES_NO_OPTION,
+                                JOptionPane.QUESTION_MESSAGE);
+                            
+                            if (choice == JOptionPane.YES_OPTION) {
+                                saveReceivedFile(fileTransfer);
+                            }
+                        });
+                    }
                 }
                 break;
                 
