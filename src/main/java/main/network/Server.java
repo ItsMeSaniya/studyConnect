@@ -90,11 +90,24 @@ public class Server {
     public void stop() {
         running = false;
 
+        // Notify all clients that server is shutting down
+        Message serverStopMsg = new Message("Server", "all", 
+            "Server is shutting down", Message.MessageType.SERVER_SHUTDOWN);
+        broadcast(serverStopMsg);
+        
+        // Give clients a moment to receive the shutdown message
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         // Close all peer connections
         for (PeerConnection conn : connections) {
             conn.close();
         }
         connections.clear();
+        connectionUsernames.clear();
 
         // Close server socket
         if (serverSocket != null && !serverSocket.isClosed()) {
@@ -112,10 +125,31 @@ public class Server {
      * Broadcast message to all connected peers
      */
     public void broadcast(Message message) {
-        for (PeerConnection conn : connections) {
-            conn.sendMessage(message);
+        // Create a copy to avoid ConcurrentModificationException
+        List<PeerConnection> activeConnections = new ArrayList<>(connections);
+        List<PeerConnection> deadConnections = new ArrayList<>();
+        
+        for (PeerConnection conn : activeConnections) {
+            if (conn.isRunning()) {
+                conn.sendMessage(message);
+            } else {
+                // Mark dead connection for removal
+                deadConnections.add(conn);
+            }
         }
-        // Don't show popup notifications for broadcasts
+        
+        // Clean up dead connections
+        if (!deadConnections.isEmpty()) {
+            for (PeerConnection conn : deadConnections) {
+                connections.remove(conn);
+                String username = connectionUsernames.remove(conn);
+                if (username != null) {
+                    System.out.println("[SERVER] Removed dead connection: " + username);
+                    // Broadcast updated peer list
+                    broadcastPeerList();
+                }
+            }
+        }
     }
 
     /**
@@ -200,10 +234,23 @@ public class Server {
     }
 
     /**
-     * Remove a peer connection
+     * Remove a peer connection and clean up
      */
     public void removePeerConnection(PeerConnection connection) {
         connections.remove(connection);
+        String username = connectionUsernames.remove(connection);
+        
+        if (username != null) {
+            System.out.println("[SERVER] Removed connection: " + username);
+            
+            // Broadcast updated peer list to remaining clients
+            broadcastPeerList();
+            
+            // Notify all clients that user left
+            Message leaveMsg = new Message(username, "all", 
+                username + " has left the chat", Message.MessageType.USER_LEAVE);
+            broadcast(leaveMsg);
+        }
     }
 
     public boolean isRunning() {

@@ -20,7 +20,8 @@ public class Message implements Serializable {
         QUIZ_START,
         QUIZ_ANSWER,
         QUIZ_RESULT,
-        PEER_LIST  // New: Server sends list of connected peers to clients
+        PEER_LIST,  // Server sends list of connected peers to clients
+        SERVER_SHUTDOWN  // Server is shutting down - clients should disconnect
     }
     
     private String sender;

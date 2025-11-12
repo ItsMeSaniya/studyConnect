@@ -35,7 +35,14 @@ public class Client {
             messageHandler.onServerStatus("Attempting to connect to " + host + ":" + port + "...");
             
             socket = new Socket();
-            socket.connect(new InetSocketAddress(host, port), 10000); // 10 second timeout
+            socket.connect(new InetSocketAddress(host, port), 10000); // 10 second timeout for connection
+            
+            // Enable TCP keep-alive to prevent auto-disconnect
+            socket.setKeepAlive(true);
+            // Disable socket timeout - keep connection open indefinitely
+            socket.setSoTimeout(0);
+            // Enable TCP_NODELAY for better responsiveness
+            socket.setTcpNoDelay(true);
             
             connection = new PeerConnection(socket, messageHandler, currentUsername);
             connected = true;

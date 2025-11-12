@@ -28,9 +28,18 @@ public class MainDashboard extends JFrame implements MessageHandler {
     private NotificationClient notificationClient;
     
     // Group Chat components
-    private JTextArea chatArea;
+    private JPanel chatMessagesPanel;  // Modern chat UI with bubbles
+    private JScrollPane chatScrollPane;
+    private JTextArea systemMessagesArea;  // For admin only - system messages
     private JTextField messageField;
     private JButton sendButton;
+    
+    // P2P Chat components
+    private JTabbedPane p2pChatTabs;  // Tabs for different P2P conversations
+    private Map<String, JPanel> p2pChatPanels;  // Map of peer -> chat panel
+    private Map<String, JTextField> p2pInputFields;  // Map of peer -> input field
+    private JList<String> p2pPeerList;  // List of available peers for P2P
+    private DefaultListModel<String> p2pPeerListModel;
     
     // Broadcast components
     private JTextArea broadcastArea;
@@ -54,6 +63,8 @@ public class MainDashboard extends JFrame implements MessageHandler {
     private JButton stopServerButton;
     private JButton connectPeerButton;
     private JButton sendFileButton;
+    private JButton connectToServerButton;
+    private JButton disconnectFromServerButton;
     private JLabel statusLabel;
     private JLabel ipLabel;
     private JTextField portField;
@@ -239,7 +250,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
             portPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
             
             // Connect button
-            JButton connectToServerButton = new JButton("Connect to Server");
+            connectToServerButton = new JButton("Connect to Server");
             connectToServerButton.setBackground(new Color(66, 133, 244));
             connectToServerButton.setForeground(Color.WHITE);
             connectToServerButton.setFocusPainted(false);
@@ -259,13 +270,74 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 
                 try {
                     int port = Integer.parseInt(portStr);
-                    connectToPeer(ip, port);
+                    
+                    // Disable connect button and show connecting state
+                    connectToServerButton.setEnabled(false);
+                    connectToServerButton.setText("Connecting...");
+                    
+                    // Attempt connection
+                    if (!NetworkUtil.isValidIPAddress(ip)) {
+                        JOptionPane.showMessageDialog(this,
+                            "Please enter a valid IP address",
+                            "Invalid IP", JOptionPane.ERROR_MESSAGE);
+                        connectToServerButton.setEnabled(true);
+                        connectToServerButton.setText("Connect to Server");
+                        return;
+                    }
+                    
+                    if (!NetworkUtil.isValidPort(port)) {
+                        JOptionPane.showMessageDialog(this,
+                            "Please enter a valid port (1024-65535)",
+                            "Invalid Port", JOptionPane.ERROR_MESSAGE);
+                        connectToServerButton.setEnabled(true);
+                        connectToServerButton.setText("Connect to Server");
+                        return;
+                    }
+                    
+                    Client client = new Client(ip, port, this, currentUser.getUsername());
+                    if (client.connect()) {
+                        connectedPeers.add(client);
+                        peerListModel.addElement(ip + ":" + port);
+                        
+                        // Send greeting message
+                        Message greeting = new Message(currentUser.getUsername(), "all",
+                            currentUser.getUsername() + " has joined the chat",
+                            Message.MessageType.USER_JOIN);
+                        client.sendMessage(greeting);
+                        
+                        // Update UI - keep connect button disabled, enable disconnect
+                        connectToServerButton.setText("Connected");
+                        disconnectFromServerButton.setEnabled(true);
+                        statusLabel.setText("Status: Connected to " + ip + ":" + port);
+                        statusLabel.setForeground(new Color(76, 175, 80));
+                    } else {
+                        // Connection failed
+                        JOptionPane.showMessageDialog(this,
+                            "Failed to connect to server at " + ip + ":" + port,
+                            "Connection Failed", JOptionPane.ERROR_MESSAGE);
+                        connectToServerButton.setEnabled(true);
+                        connectToServerButton.setText("Connect to Server");
+                    }
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(this, 
                         "Invalid port number", 
                         "Connection Error", 
                         JOptionPane.ERROR_MESSAGE);
+                    connectToServerButton.setEnabled(true);
+                    connectToServerButton.setText("Connect to Server");
                 }
+            });
+            
+            // Disconnect button
+            disconnectFromServerButton = new JButton("Disconnect from Server");
+            disconnectFromServerButton.setBackground(new Color(244, 67, 54));
+            disconnectFromServerButton.setForeground(Color.WHITE);
+            disconnectFromServerButton.setFocusPainted(false);
+            disconnectFromServerButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+            disconnectFromServerButton.setMaximumSize(new Dimension(200, 35));
+            disconnectFromServerButton.setEnabled(false);  // Initially disabled
+            disconnectFromServerButton.addActionListener(e -> {
+                disconnectFromServer();
             });
             
             connectPanel.add(ipPanel);
@@ -275,6 +347,8 @@ public class MainDashboard extends JFrame implements MessageHandler {
             connectPanel.add(portPanel);
             connectPanel.add(Box.createVerticalStrut(10));
             connectPanel.add(connectToServerButton);
+            connectPanel.add(Box.createVerticalStrut(5));
+            connectPanel.add(disconnectFromServerButton);
             
             topPanel.add(connectPanel);
         }
@@ -343,25 +417,87 @@ public class MainDashboard extends JFrame implements MessageHandler {
         panel.setBackground(Color.WHITE);
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
         
+        // Check if admin
+        boolean isAdmin = currentUser.getUsername().equalsIgnoreCase("admin") && 
+                         currentUser.getPassword().equals("admin");
+        
         // Title
-        JLabel titleLabel = new JLabel("Study Group Chat");
+        JLabel titleLabel = new JLabel("💬 Study Group Chat");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
         // Info label
-        JLabel infoLabel = new JLabel("Chat with your study group members");
+        String infoText = isAdmin ? 
+            "Monitor and participate in group discussions" :
+            "Chat with your study group members";
+        JLabel infoLabel = new JLabel(infoText);
         infoLabel.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         infoLabel.setForeground(new Color(100, 100, 100));
         infoLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
-        // Chat area
-        chatArea = new JTextArea();
-        chatArea.setEditable(false);
-        chatArea.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        chatArea.setLineWrap(true);
-        chatArea.setWrapStyleWord(true);
-        JScrollPane chatScrollPane = new JScrollPane(chatArea);
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.setOpaque(false);
+        topPanel.add(titleLabel, BorderLayout.NORTH);
+        topPanel.add(infoLabel, BorderLayout.SOUTH);
+        
+        // For admin: Create split pane with system messages and chat
+        if (isAdmin) {
+            JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+            splitPane.setResizeWeight(0.3);
+            splitPane.setBorder(null);
+            
+            // System Messages Panel (top)
+            JPanel systemPanel = new JPanel(new BorderLayout());
+            systemPanel.setBackground(Color.WHITE);
+            systemPanel.setBorder(BorderFactory.createTitledBorder(
+                new LineBorder(new Color(200, 200, 200)), "🔔 System Messages"));
+            
+            systemMessagesArea = new JTextArea();
+            systemMessagesArea.setEditable(false);
+            systemMessagesArea.setFont(new Font("Consolas", Font.PLAIN, 12));
+            systemMessagesArea.setLineWrap(true);
+            systemMessagesArea.setWrapStyleWord(true);
+            systemMessagesArea.setBackground(new Color(245, 245, 245));
+            systemMessagesArea.setForeground(new Color(60, 60, 60));
+            JScrollPane systemScrollPane = new JScrollPane(systemMessagesArea);
+            systemScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+            systemPanel.add(systemScrollPane, BorderLayout.CENTER);
+            
+            // Chat Messages Panel (bottom)
+            JPanel chatPanel = createModernChatPanel();
+            
+            splitPane.setTopComponent(systemPanel);
+            splitPane.setBottomComponent(chatPanel);
+            
+            panel.add(topPanel, BorderLayout.NORTH);
+            panel.add(splitPane, BorderLayout.CENTER);
+        } else {
+            // For clients: Only show chat messages
+            JPanel chatPanel = createModernChatPanel();
+            panel.add(topPanel, BorderLayout.NORTH);
+            panel.add(chatPanel, BorderLayout.CENTER);
+        }
+        
+        return panel;
+    }
+    
+    /**
+     * Creates a modern chat panel with bubble-style messages
+     */
+    private JPanel createModernChatPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(Color.WHITE);
+        
+        // Chat messages container (vertical BoxLayout for bubbles)
+        chatMessagesPanel = new JPanel();
+        chatMessagesPanel.setLayout(new BoxLayout(chatMessagesPanel, BoxLayout.Y_AXIS));
+        chatMessagesPanel.setBackground(new Color(240, 242, 245));
+        chatMessagesPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        
+        chatScrollPane = new JScrollPane(chatMessagesPanel);
         chatScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        chatScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        chatScrollPane.getVerticalScrollBar().setUnitIncrement(16);
         
         // Message input panel
         JPanel inputPanel = new JPanel(new BorderLayout(10, 0));
@@ -370,29 +506,180 @@ public class MainDashboard extends JFrame implements MessageHandler {
         
         messageField = new JTextField();
         messageField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        messageField.setBorder(BorderFactory.createCompoundBorder(
+            new LineBorder(new Color(200, 200, 200), 1),
+            new EmptyBorder(8, 12, 8, 12)
+        ));
         messageField.addActionListener(e -> sendGroupMessage());
         
-        sendButton = new JButton("Send");
+        sendButton = new JButton("📤 Send");
         sendButton.setBackground(new Color(66, 133, 244));
         sendButton.setForeground(Color.WHITE);
         sendButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
         sendButton.setFocusPainted(false);
-        sendButton.setPreferredSize(new Dimension(80, 35));
+        sendButton.setBorder(new EmptyBorder(10, 20, 10, 20));
         sendButton.addActionListener(e -> sendGroupMessage());
         
         inputPanel.add(messageField, BorderLayout.CENTER);
         inputPanel.add(sendButton, BorderLayout.EAST);
         
-        JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.setOpaque(false);
-        topPanel.add(titleLabel, BorderLayout.NORTH);
-        topPanel.add(infoLabel, BorderLayout.SOUTH);
-        
-        panel.add(topPanel, BorderLayout.NORTH);
         panel.add(chatScrollPane, BorderLayout.CENTER);
         panel.add(inputPanel, BorderLayout.SOUTH);
         
         return panel;
+    }
+    
+    /**
+     * Adds a chat message bubble to the chat panel
+     * @param sender The sender's username
+     * @param message The message text
+     * @param isOwn Whether this is the current user's message
+     */
+    private void addChatBubble(String sender, String message, boolean isOwn) {
+        SwingUtilities.invokeLater(() -> {
+            JPanel bubbleContainer = new JPanel();
+            bubbleContainer.setLayout(new BoxLayout(bubbleContainer, BoxLayout.X_AXIS));
+            bubbleContainer.setOpaque(false);
+            bubbleContainer.setBorder(new EmptyBorder(5, 10, 5, 10));
+            
+            // Create message bubble
+            JPanel bubble = new JPanel();
+            bubble.setLayout(new BoxLayout(bubble, BoxLayout.Y_AXIS));
+            bubble.setMaximumSize(new Dimension(400, Integer.MAX_VALUE));
+            
+            if (isOwn) {
+                // Own message - right side, blue bubble
+                bubble.setBackground(new Color(66, 133, 244));
+                bubble.setBorder(BorderFactory.createCompoundBorder(
+                    new LineBorder(new Color(66, 133, 244), 0, true),
+                    new EmptyBorder(10, 15, 10, 15)
+                ));
+                
+                JLabel messageLabel = new JLabel("<html><div style='width:300px;'>" + 
+                    escapeHtml(message) + "</div></html>");
+                messageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+                messageLabel.setForeground(Color.WHITE);
+                messageLabel.setAlignmentX(Component.RIGHT_ALIGNMENT);
+                
+                JLabel timeLabel = new JLabel(getCurrentTime());
+                timeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+                timeLabel.setForeground(new Color(230, 230, 255));
+                timeLabel.setAlignmentX(Component.RIGHT_ALIGNMENT);
+                
+                bubble.add(messageLabel);
+                bubble.add(Box.createVerticalStrut(3));
+                bubble.add(timeLabel);
+                
+                bubbleContainer.add(Box.createHorizontalGlue());
+                bubbleContainer.add(bubble);
+                
+            } else {
+                // Others' message - left side, white bubble
+                bubble.setBackground(Color.WHITE);
+                bubble.setBorder(BorderFactory.createCompoundBorder(
+                    new LineBorder(new Color(220, 220, 220), 1, true),
+                    new EmptyBorder(10, 15, 10, 15)
+                ));
+                
+                JLabel senderLabel = new JLabel(sender);
+                senderLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                senderLabel.setForeground(new Color(66, 133, 244));
+                senderLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                
+                JLabel messageLabel = new JLabel("<html><div style='width:300px;'>" + 
+                    escapeHtml(message) + "</div></html>");
+                messageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+                messageLabel.setForeground(new Color(50, 50, 50));
+                messageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                
+                JLabel timeLabel = new JLabel(getCurrentTime());
+                timeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+                timeLabel.setForeground(new Color(150, 150, 150));
+                timeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                
+                bubble.add(senderLabel);
+                bubble.add(Box.createVerticalStrut(3));
+                bubble.add(messageLabel);
+                bubble.add(Box.createVerticalStrut(3));
+                bubble.add(timeLabel);
+                
+                bubbleContainer.add(bubble);
+                bubbleContainer.add(Box.createHorizontalGlue());
+            }
+            
+            chatMessagesPanel.add(bubbleContainer);
+            chatMessagesPanel.revalidate();
+            
+            // Auto-scroll to bottom
+            SwingUtilities.invokeLater(() -> {
+                JScrollBar vertical = chatScrollPane.getVerticalScrollBar();
+                vertical.setValue(vertical.getMaximum());
+            });
+        });
+    }
+    
+    /**
+     * Escapes HTML special characters
+     */
+    private String escapeHtml(String text) {
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;")
+                   .replace("\n", "<br/>");
+    }
+    
+    /**
+     * Gets current time in HH:mm format
+     */
+    private String getCurrentTime() {
+        return new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
+    }
+    
+    /**
+     * Adds system message to admin's system messages area
+     */
+    /**
+     * Appends system message to admin's system messages area
+     */
+    private void appendToSystemMessages(String text) {
+        if (systemMessagesArea != null) {
+            SwingUtilities.invokeLater(() -> {
+                String timestamp = new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date());
+                systemMessagesArea.append("[" + timestamp + "] " + text + "\n");
+                systemMessagesArea.setCaretPosition(systemMessagesArea.getDocument().getLength());
+            });
+        }
+    }
+    
+    /**
+     * Updates admin's peer list with all server connections (real-time)
+     */
+    private void updateAdminPeerList() {
+        SwingUtilities.invokeLater(() -> {
+            // Only for admin when server is running
+            boolean isAdmin = currentUser.getUsername().equalsIgnoreCase("admin") && 
+                             currentUser.getPassword().equals("admin");
+            
+            if (!isAdmin || server == null || !server.isRunning()) {
+                return;
+            }
+            
+            // Clear and rebuild peer list from server connections
+            peerListModel.clear();
+            
+            // Add all server connections with usernames
+            for (Map.Entry<PeerConnection, String> entry : connectionUsernames.entrySet()) {
+                PeerConnection conn = entry.getKey();
+                String username = entry.getValue();
+                String address = conn.getPeerAddress();
+                
+                // Only add if connection is still active
+                if (conn.isRunning()) {
+                    peerListModel.addElement(username + " (" + address + ")");
+                }
+            }
+        });
     }
     
     private JPanel createFileSharingTab() {
@@ -706,6 +993,13 @@ public class MainDashboard extends JFrame implements MessageHandler {
             server = null;
         }
         
+        // Clear admin's peer list
+        SwingUtilities.invokeLater(() -> {
+            peerListModel.clear();
+            connectionUsernames.clear();
+            peerConnections.clear();
+        });
+        
         startServerButton.setEnabled(true);
         stopServerButton.setEnabled(false);
         portField.setEnabled(true);
@@ -831,6 +1125,65 @@ public class MainDashboard extends JFrame implements MessageHandler {
         broadcastField.setText("");
     }
     
+    /**
+     * Disconnects client from server
+     */
+    private void disconnectFromServer() {
+        if (connectedPeers.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Not connected to any server",
+                "Disconnect Error",
+                JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "Are you sure you want to disconnect from the server?",
+            "Confirm Disconnect",
+            JOptionPane.YES_NO_OPTION);
+            
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+        
+        // Send disconnect message
+        Message leaveMessage = new Message(currentUser.getUsername(), "all",
+            currentUser.getUsername() + " has left the chat",
+            Message.MessageType.USER_LEAVE);
+        
+        // Disconnect all clients
+        for (Client client : connectedPeers) {
+            try {
+                client.sendMessage(leaveMessage);
+                client.disconnect();
+            } catch (Exception e) {
+                System.err.println("Error disconnecting client: " + e.getMessage());
+            }
+        }
+        
+        // Clear connections
+        connectedPeers.clear();
+        peerListModel.clear();
+        peerConnections.clear();
+        peerUsernames.clear();
+        connectionUsernames.clear();
+        
+        // Update UI
+        connectToServerButton.setEnabled(true);
+        connectToServerButton.setText("Connect to Server");
+        disconnectFromServerButton.setEnabled(false);
+        statusLabel.setText("Status: Disconnected");
+        statusLabel.setForeground(new Color(244, 67, 54));
+        
+        // Clear chat areas
+        appendToChat("\n--- Disconnected from server ---\n");
+        
+        JOptionPane.showMessageDialog(this,
+            "Successfully disconnected from server",
+            "Disconnected",
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+    
     private void updateLeaderboard() {
         if (quizResults.isEmpty()) {
             leaderboardArea.setText("No quiz results yet.\n\nWait for a quiz to be completed to see rankings here.");
@@ -939,14 +1292,6 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 sendFileToUser(targetPeer, selectedFile);
             }
         }
-    }
-    
-    /**
-     * Get current time as formatted string
-     */
-    private String getCurrentTime() {
-        java.time.LocalTime now = java.time.LocalTime.now();
-        return String.format("%02d:%02d:%02d", now.getHour(), now.getMinute(), now.getSecond());
     }
     
     /**
@@ -1069,11 +1414,34 @@ public class MainDashboard extends JFrame implements MessageHandler {
         }
     }
     
+    /**
+     * Appends a chat message using modern bubble UI
+     * @param text Message in format "Sender: Message" or just "Message"
+     */
     private void appendToChat(String text) {
-        SwingUtilities.invokeLater(() -> {
-            chatArea.append(text + "\n");
-            chatArea.setCaretPosition(chatArea.getDocument().getLength());
-        });
+        // Parse message format: "Sender: Message" or "You: Message"
+        String sender = "";
+        String message = text;
+        boolean isOwn = false;
+        
+        if (text.contains(": ")) {
+            int colonIndex = text.indexOf(": ");
+            sender = text.substring(0, colonIndex);
+            message = text.substring(colonIndex + 2);
+            
+            // Check if it's the current user's message
+            isOwn = sender.equalsIgnoreCase("You") || 
+                    sender.equalsIgnoreCase(currentUser.getUsername());
+            
+            // Skip system messages in chat (those without proper sender format)
+            if (text.startsWith("---") || text.startsWith("[SYSTEM]")) {
+                appendToSystemMessages(text);
+                return;
+            }
+        }
+        
+        // Add message bubble to chat
+        addChatBubble(sender.isEmpty() ? "Unknown" : sender, message, isOwn);
     }
     
     private void appendToBroadcast(String text) {
@@ -1200,26 +1568,14 @@ public class MainDashboard extends JFrame implements MessageHandler {
                 connectionUsernames.put(connection, username);
                 peerUsernames.put(peerAddr, username);
                 
-                // Update peer list with username
-                boolean found = false;
-                for (int i = 0; i < peerListModel.size(); i++) {
-                    if (peerListModel.get(i).contains(peerAddr)) {
-                        peerListModel.set(i, username + " (" + peerAddr + ")");
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    peerListModel.addElement(username + " (" + peerAddr + ")");
-                }
+                // Update admin's peer list in real-time
+                updateAdminPeerList();
                 
-                // Show connection message
+                // Show system message (admin only)
                 boolean isAdmin = currentUser.getUsername().equalsIgnoreCase("admin") && 
                                   currentUser.getPassword().equals("admin");
                 if (isAdmin) {
-                    appendToChat("[SYSTEM] Client connected: " + username + " (" + peerAddr + ")");
-                } else {
-                    appendToChat("[SYSTEM] " + message.getContent());
+                    appendToSystemMessages("✅ Client connected: " + username + " (" + peerAddr + ")");
                 }
                 
                 // Update peer selector with username
@@ -1229,35 +1585,135 @@ public class MainDashboard extends JFrame implements MessageHandler {
             case USER_LEAVE:
                 String leavingUser = connectionUsernames.get(connection);
                 if (leavingUser != null) {
-                    appendToChat("[SYSTEM] " + leavingUser + " has left");
+                    String leavingAddr = connection.getPeerAddress();
+                    
+                    // Remove from connectionUsernames
                     connectionUsernames.remove(connection);
                     
-                    // Remove from peer list
-                    for (int i = 0; i < peerListModel.size(); i++) {
-                        if (peerListModel.get(i).contains(leavingUser)) {
-                            peerListModel.remove(i);
-                            break;
-                        }
+                    // Update admin's peer list in real-time
+                    updateAdminPeerList();
+                    
+                    // Show system message (admin only)
+                    boolean isAdminLeave = currentUser.getUsername().equalsIgnoreCase("admin") && 
+                                          currentUser.getPassword().equals("admin");
+                    if (isAdminLeave) {
+                        appendToSystemMessages("❌ Client disconnected: " + leavingUser + " (" + leavingAddr + ")");
                     }
+                    
+                    // Update peer selector
+                    updatePeerSelector(connection);
                 }
                 break;
                 
             case PEER_LIST:
-                // Received list of connected peers from server - update file target selector
+                // Received list of connected peers from server - update UI for clients
                 String[] peers = message.getContent().split(",");
                 
                 SwingUtilities.invokeLater(() -> {
-                    fileTargetSelector.removeAllItems();
-                    fileTargetSelector.addItem("Select recipient...");
+                    // Check if client (not admin)
+                    boolean isClientMode = !currentUser.getUsername().equalsIgnoreCase("admin") || 
+                                          !currentUser.getPassword().equals("admin");
                     
-                    for (String peer : peers) {
-                        if (!peer.trim().isEmpty() && 
-                            !peer.trim().equals(currentUser.getUsername())) {
-                            fileTargetSelector.addItem(peer.trim());
+                    if (isClientMode) {
+                        // Build a set of unique peer names (avoid duplicates)
+                        java.util.Set<String> uniquePeers = new java.util.LinkedHashSet<>();
+                        
+                        for (String peer : peers) {
+                            String trimmedPeer = peer.trim();
+                            if (!trimmedPeer.isEmpty() && 
+                                !trimmedPeer.equals(currentUser.getUsername())) {
+                                uniquePeers.add(trimmedPeer);
+                            }
+                        }
+                        
+                        // Only update if the list actually changed
+                        boolean needsUpdate = false;
+                        if (peerListModel.size() != uniquePeers.size()) {
+                            needsUpdate = true;
+                        } else {
+                            // Check if content is different
+                            int i = 0;
+                            for (String peer : uniquePeers) {
+                                if (i >= peerListModel.size() || !peerListModel.get(i).equals(peer)) {
+                                    needsUpdate = true;
+                                    break;
+                                }
+                                i++;
+                            }
+                        }
+                        
+                        // Update peer list UI only if changed
+                        if (needsUpdate) {
+                            peerListModel.clear();
+                            for (String peer : uniquePeers) {
+                                peerListModel.addElement(peer);
+                            }
+                            System.out.println("[DEBUG] Client peer list updated: " + uniquePeers);
                         }
                     }
                     
-                    System.out.println("[DEBUG] Updated file recipient list: " + Arrays.toString(peers));
+                    // Update file target selector for all users
+                    fileTargetSelector.removeAllItems();
+                    fileTargetSelector.addItem("Select recipient...");
+                    
+                    // Use set to avoid duplicates in dropdown
+                    java.util.Set<String> uniqueTargets = new java.util.LinkedHashSet<>();
+                    for (String peer : peers) {
+                        String trimmedPeer = peer.trim();
+                        if (!trimmedPeer.isEmpty() && 
+                            !trimmedPeer.equals(currentUser.getUsername())) {
+                            uniqueTargets.add(trimmedPeer);
+                        }
+                    }
+                    
+                    for (String peer : uniqueTargets) {
+                        fileTargetSelector.addItem(peer);
+                    }
+                });
+                break;
+                
+            case SERVER_SHUTDOWN:
+                // Server is shutting down - disconnect gracefully
+                SwingUtilities.invokeLater(() -> {
+                    // Close all client connections
+                    for (Client client : connectedPeers) {
+                        try {
+                            client.disconnect();
+                        } catch (Exception e) {
+                            System.err.println("Error disconnecting client: " + e.getMessage());
+                        }
+                    }
+                    
+                    // Clear all connection data
+                    connectedPeers.clear();
+                    peerListModel.clear();
+                    peerConnections.clear();
+                    peerUsernames.clear();
+                    connectionUsernames.clear();
+                    
+                    // Re-enable connect button
+                    if (connectToServerButton != null) {
+                        connectToServerButton.setEnabled(true);
+                        connectToServerButton.setText("Connect to Server");
+                    }
+                    
+                    if (disconnectFromServerButton != null) {
+                        disconnectFromServerButton.setEnabled(false);
+                    }
+                    
+                    // Update status label
+                    if (statusLabel != null) {
+                        statusLabel.setText("Status: Server shut down");
+                        statusLabel.setForeground(new Color(244, 67, 54));
+                    }
+                    
+                    // Show notification to user
+                    appendToChat("\n--- Server has shut down. You have been disconnected. ---\n");
+                    
+                    JOptionPane.showMessageDialog(this,
+                        "The server has shut down.\nYou have been disconnected.",
+                        "Server Shutdown",
+                        JOptionPane.WARNING_MESSAGE);
                 });
                 break;
                 

@@ -25,6 +25,13 @@ public class PeerConnection implements Runnable {
         this.peerAddress = socket.getInetAddress().getHostAddress();
 
         try {
+            // Enable TCP keep-alive to prevent auto-disconnect
+            socket.setKeepAlive(true);
+            // Disable socket timeout - keep connection open indefinitely
+            socket.setSoTimeout(0);
+            // Enable TCP_NODELAY for better responsiveness
+            socket.setTcpNoDelay(true);
+            
             // Create output stream first
             this.out = new ObjectOutputStream(socket.getOutputStream());
             this.out.flush();
@@ -84,11 +91,16 @@ public class PeerConnection implements Runnable {
      */
     public synchronized void sendMessage(Message message) {
         try {
-            if (out != null && !socket.isClosed()) {
+            if (out != null && running && !socket.isClosed()) {
                 out.writeObject(message);
                 out.flush();
                 out.reset();
             }
+        } catch (SocketException e) {
+            // Connection is broken, close it
+            running = false;
+            close();
+            System.err.println("[PeerConnection] Connection broken to " + peerAddress + ", closing...");
         } catch (IOException e) {
             messageHandler.onServerStatus("Error sending message: " + e.getMessage());
         }
@@ -99,13 +111,18 @@ public class PeerConnection implements Runnable {
      */
     public synchronized void sendFile(FileTransfer fileTransfer) {
         try {
-            if (out != null && !socket.isClosed()) {
+            if (out != null && running && !socket.isClosed()) {
                 out.writeObject(fileTransfer);
                 out.flush();
                 out.reset();
                 messageHandler.onServerStatus("File sent: " + fileTransfer.getFileName());
                 // Popup notification removed
             }
+        } catch (SocketException e) {
+            // Connection is broken, close it
+            running = false;
+            close();
+            System.err.println("[PeerConnection] Connection broken to " + peerAddress + ", closing...");
         } catch (IOException e) {
             messageHandler.onServerStatus("Error sending file: " + e.getMessage());
         }
