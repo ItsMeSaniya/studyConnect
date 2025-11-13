@@ -21,11 +21,16 @@ public class Message implements Serializable {
         QUIZ_ANSWER,
         QUIZ_RESULT,
         PEER_LIST,  // Server sends list of connected peers to clients
-        SERVER_SHUTDOWN,  // Server is shutting down
-        HEARTBEAT,  // Heartbeat ping/pong
+        SERVER_SHUTDOWN,  // Server is shutting down - clients should disconnect
+        HEARTBEAT,  // Ping/pong to keep connection alive and detect dead connections
         CLASS_JOIN,  // Student joins the class for screen sharing
         CLASS_LEAVE,  // Student leaves the class
-        CLASS_INFO  // Server sends UDP port info to student
+        CLASS_INFO,  // Server sends UDP port info to student
+        FILE_LIST_REQUEST,  // Client requests list of shared files
+        FILE_LIST_RESPONSE,  // Server sends list of shared files
+        FILE_UPLOAD,  // Client uploads file to server
+        FILE_DOWNLOAD_REQUEST,  // Client requests to download a file
+        FILE_DELETE_REQUEST  // Client/Admin requests to delete a file
     }
     
     private String sender;
@@ -34,8 +39,9 @@ public class Message implements Serializable {
     private MessageType type;
     private LocalDateTime timestamp;
     
-    // Screen sharing field
+    // Screen sharing fields
     private int udpPort;  // UDP port for screen sharing
+    private String clientIP;  // Client's actual IP address for UDP
     
     // Quiz-related fields
     private Quiz quizData;
@@ -44,6 +50,10 @@ public class Message implements Serializable {
     
     // File transfer field
     private FileTransfer fileTransfer;
+    
+    // File sharing fields
+    private FileMetadata fileMetadata;
+    private java.util.List<FileMetadata> fileList;
     
     public Message() {
         this.timestamp = LocalDateTime.now();
@@ -147,6 +157,30 @@ public class Message implements Serializable {
     
     public void setUdpPort(int udpPort) {
         this.udpPort = udpPort;
+    }
+    
+    public String getClientIP() {
+        return clientIP;
+    }
+    
+    public void setClientIP(String clientIP) {
+        this.clientIP = clientIP;
+    }
+    
+    public FileMetadata getFileMetadata() {
+        return fileMetadata;
+    }
+    
+    public void setFileMetadata(FileMetadata fileMetadata) {
+        this.fileMetadata = fileMetadata;
+    }
+    
+    public java.util.List<FileMetadata> getFileList() {
+        return fileList;
+    }
+    
+    public void setFileList(java.util.List<FileMetadata> fileList) {
+        this.fileList = fileList;
     }
     
     @Override

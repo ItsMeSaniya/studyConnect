@@ -21,4 +21,9 @@ public interface MessageHandler {
      * Called when server status changes
      */
     void onServerStatus(String status);
+    
+    /**
+     * Called when connection is lost
+     */
+    void onConnectionLost(PeerConnection connection);
 }
