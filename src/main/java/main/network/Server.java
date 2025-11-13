@@ -269,6 +269,7 @@ public class Server {
                 messageHandler.onMessageReceived(message, connection);
                 broadcast(message);
                 break;
+            }
                 
             case HEARTBEAT:
                 // Respond to heartbeat - send it back to keep connection alive
@@ -321,7 +322,6 @@ public class Server {
                 // For other types, just broadcast
                 broadcast(message);
                 break;
-            }
         }
     }
     

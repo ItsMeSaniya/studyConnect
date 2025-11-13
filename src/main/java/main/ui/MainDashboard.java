@@ -3,6 +3,7 @@ package main.ui;
 import main.model.*;
 import main.network.Client;
 import main.network.MessageHandler;
+import main.network.NotificationClient;
 import main.network.PeerConnection;
 import main.network.Server;
 import main.network.UDPBroadcaster;
@@ -74,6 +75,7 @@ public class MainDashboard extends JFrame implements MessageHandler {
     private JTextArea studentLeaderboardArea; // For students to view shared leaderboard
     private Quiz activeQuiz;
     private Map<String, QuizResult> quizResults;
+    private NotificationClient notificationClient;
 
     // UI Components
     private JButton startServerButton;
@@ -2160,65 +2162,6 @@ public class MainDashboard extends JFrame implements MessageHandler {
         // Display locally only once (we won't see it come back because of sender filter)
         appendToBroadcast("[BROADCAST] You: " + text);
         broadcastField.setText("");
-    }
-    
-    /**
-     * Disconnects client from server
-     */
-    private void disconnectFromServer() {
-        if (connectedPeers.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                "Not connected to any server",
-                "Disconnect Error",
-                JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        
-        int confirm = JOptionPane.showConfirmDialog(this,
-            "Are you sure you want to disconnect from the server?",
-            "Confirm Disconnect",
-            JOptionPane.YES_NO_OPTION);
-            
-        if (confirm != JOptionPane.YES_OPTION) {
-            return;
-        }
-        
-        // Send disconnect message
-        Message leaveMessage = new Message(currentUser.getUsername(), "all",
-            currentUser.getUsername() + " has left the chat",
-            Message.MessageType.USER_LEAVE);
-        
-        // Disconnect all clients
-        for (Client client : connectedPeers) {
-            try {
-                client.sendMessage(leaveMessage);
-                client.disconnect();
-            } catch (Exception e) {
-                System.err.println("Error disconnecting client: " + e.getMessage());
-            }
-        }
-        
-        // Clear connections
-        connectedPeers.clear();
-        peerListModel.clear();
-        peerConnections.clear();
-        peerUsernames.clear();
-        connectionUsernames.clear();
-        
-        // Update UI
-        connectToServerButton.setEnabled(true);
-        connectToServerButton.setText("Connect to Server");
-        disconnectFromServerButton.setEnabled(false);
-        statusLabel.setText("Status: Disconnected");
-        statusLabel.setForeground(new Color(244, 67, 54));
-        
-        // Clear chat areas
-        appendToChat("\n--- Disconnected from server ---\n");
-        
-        JOptionPane.showMessageDialog(this,
-            "Successfully disconnected from server",
-            "Disconnected",
-            JOptionPane.INFORMATION_MESSAGE);
     }
     
     private void updateLeaderboard() {
